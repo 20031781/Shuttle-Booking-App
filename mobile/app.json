@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "Shuttle Booking",
+    "slug": "shuttle-booking-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"]
+  }
+}
