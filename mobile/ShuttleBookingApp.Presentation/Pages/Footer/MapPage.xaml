@@ -1,0 +1,13 @@
+﻿<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ShuttleBookingApp.Presentation.Pages.Footer.MapPage"
+             NavigationPage.HasNavigationBar="False"
+             Title="Mappa">
+    <Grid>
+        <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center">
+            <Label Text="Mappa" FontSize="24" FontAttributes="Bold" HorizontalOptions="Center" />
+            <Label Text="Qui verrà visualizzata la mappa" FontSize="16" HorizontalOptions="Center" Margin="0,20,0,0" />
+            <Button Text="Cerca shuttle" Margin="0,30,0,0" />
+        </VerticalStackLayout>
+    </Grid>
+</ContentPage>

@@ -1,0 +1,48 @@
+﻿<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ShuttleBookingApp.Presentation.Pages.ProfileCompletionPage"
+             Title="Completa il tuo profilo">
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="15">
+            <Label Text="Per completare la registrazione, abbiamo bisogno di altre informazioni:"
+                   FontSize="18"
+                   HorizontalOptions="Center" />
+
+            <Label Text="Tutti i campi con * sono obbligatori"
+                   FontSize="14"
+                   TextColor="Red"
+                   HorizontalOptions="Center" />
+
+            <Frame BorderColor="LightGray" Padding="10" Margin="0,10,0,0">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Informazioni personali" FontSize="16" FontAttributes="Bold" />
+
+                    <Label Text="Città *" FontAttributes="Bold" />
+                    <Entry Text="{Binding City}" Placeholder="Inserisci la tua città" />
+                    <Label Text="La città è richiesta per offrirti servizi shuttle nella tua area"
+                           FontSize="12" TextColor="Gray" />
+
+                    <Label Text="Prefisso telefonico *" FontAttributes="Bold" />
+                    <Entry Text="{Binding PhoneCountryCode}" Placeholder="Es. +39" />
+                    <Label Text="Includi il + prima del prefisso nazionale (es. +39 per l'Italia)"
+                           FontSize="12" TextColor="Gray" />
+
+                    <Label Text="Numero di telefono" />
+                    <Entry Text="{Binding Phone}" Placeholder="Inserisci il tuo numero di telefono" />
+                    <Label Text="Opzionale, ma utile per ricevere comunicazioni di servizio"
+                           FontSize="12" TextColor="Gray" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <Button Text="Salva e continua"
+                    Command="{Binding SaveCommand}"
+                    Margin="0,20,0,0"
+                    BackgroundColor="Blue"
+                    TextColor="White" />
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}"
+                               IsVisible="{Binding IsBusy}"
+                               HorizontalOptions="Center" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

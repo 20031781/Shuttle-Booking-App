@@ -1,0 +1,87 @@
+﻿# Visual Studio
+.vs/
+*.sln.ide
+*.sln.docstates
+*.sln.vspscc
+*.suo
+*.user
+*.userosscache
+*.sln.cache
+*.vscode/
+*.code-workspace
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+[Aa][Rr][Tt][Ff][Ii][Ll][Ee]/
+[Aa][Rr][Tt][Ff][Ii][Ll][Ee]s/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+[Bb]uild/
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+**/packages/
+**/bin/
+**/obj/
+*.nuspec
+*.dll
+*.pdb
+
+# Rider
+.idea/
+*.sln.iml
+
+# Visual Studio Code
+.vscode/
+.history/
+
+# ASP.NET Core
+appsettings*.json
+appsettings.*.json
+
+# User secrets
+secrets.json
+
+# Azure Web Apps
+*.Publish.xml
+*.config
+
+# Other files
+*.db
+*.bak
+*.sql
+*.sql.gz
+*.zip
+*.tar.gz
+*.tgz
+*.tar
+*.gzip
+*.7z
+
+# Coverage results
+coverage/
+*.coverage
+*.coveragexml
+
+# Project files
+*.csproj.user
+*.csproj.lock
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini

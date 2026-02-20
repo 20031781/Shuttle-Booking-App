@@ -1,0 +1,24 @@
+﻿<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:components="clr-namespace:ShuttleBookingApp.Presentation.Components"
+             x:Class="ShuttleBookingApp.Presentation.Components.SettingsItem"
+             x:Name="This">
+
+    <Frame CornerRadius="8"
+           HasShadow="False">
+           
+        <Grid Padding="10" ColumnDefinitions="*,Auto">
+        
+            <!-- Label sinistra: Titolo -->
+            <Label Text="{Binding Title}"
+                   VerticalOptions="Center" x:DataType="components:SettingsItem"
+                   FontAttributes="Bold" />
+
+            <!-- Testo visualizzato a destra -->
+            <ContentPresenter x:Name="RightContentPresenter"
+                              Grid.Column="1"
+                              VerticalOptions="Center" />
+
+        </Grid>
+    </Frame>
+</ContentView>

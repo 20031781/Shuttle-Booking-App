@@ -1,0 +1,40 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShuttleBooking.Presentation", "ShuttleBooking.Presentation\ShuttleBooking.Presentation.csproj", "{89751044-A3F8-4828-9957-54863F8BD17B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{6C0313F6-632D-4C71-9FD9-35C5EEF95165}"
+	ProjectSection(SolutionItems) = preProject
+		docker-compose.yml = docker-compose.yml
+		readme.md = readme.md
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShuttleBooking.Business", "ShuttleBooking.Business\ShuttleBooking.Business.csproj", "{DE252BA0-62DB-4006-91DA-C0C86FCFB3CC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShuttleBooking.Data", "ShuttleBooking.Data\ShuttleBooking.Data.csproj", "{6F195A11-255C-460F-A4B6-7D39105F442B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShuttleBooking.Tests", "ShuttleBooking.Tests\ShuttleBooking.Tests.csproj", "{DF10E243-2D90-4E9E-B578-A07850C17D5B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{89751044-A3F8-4828-9957-54863F8BD17B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{89751044-A3F8-4828-9957-54863F8BD17B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{89751044-A3F8-4828-9957-54863F8BD17B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{89751044-A3F8-4828-9957-54863F8BD17B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DE252BA0-62DB-4006-91DA-C0C86FCFB3CC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DE252BA0-62DB-4006-91DA-C0C86FCFB3CC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DE252BA0-62DB-4006-91DA-C0C86FCFB3CC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DE252BA0-62DB-4006-91DA-C0C86FCFB3CC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6F195A11-255C-460F-A4B6-7D39105F442B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F195A11-255C-460F-A4B6-7D39105F442B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6F195A11-255C-460F-A4B6-7D39105F442B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6F195A11-255C-460F-A4B6-7D39105F442B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DF10E243-2D90-4E9E-B578-A07850C17D5B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DF10E243-2D90-4E9E-B578-A07850C17D5B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DF10E243-2D90-4E9E-B578-A07850C17D5B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DF10E243-2D90-4E9E-B578-A07850C17D5B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

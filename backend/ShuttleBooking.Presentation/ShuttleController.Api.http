@@ -1,0 +1,28 @@
+@ShuttleBookingUrl = http://localhost:5000
+@id = 99
+
+### Ottieni tutti gli shuttle
+GET {{ShuttleBookingUrl}}/Shuttles/Getshuttles/
+Accept: application/json
+
+### Ottieni uno shuttle tramite ID
+GET {{ShuttleBookingUrl}}/Shuttles/GetShuttle/{{id}} # Sostituire l'ID con quello che si desidera
+Accept: application/json
+
+### Crea un nuovo shuttle
+POST {{ShuttleBookingUrl}}/Shuttles/CreateShuttle
+Content-Type: application/json
+
+{
+  "name": "Nuovo Shuttle",
+  "capacity": 30
+}
+
+### Aggiorna la capacità di uno shuttle
+PUT {{ShuttleBookingUrl}}/Shuttles/UpdateShuttle/{{id}}  # Sostituisci 1 con l'ID reale dello shuttle
+Content-Type: application/json
+
+30
+
+### Elimina uno shuttle tramite ID
+DELETE {{ShuttleBookingUrl}}/Shuttles/DeleteShuttle/{{id}}  # Sostituisci 1 con l'ID reale dello shuttle

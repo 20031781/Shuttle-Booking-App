@@ -1,0 +1,28 @@
+﻿<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ShuttleBookingApp.Presentation.Pages.Footer.AdminPage"
+             NavigationPage.HasNavigationBar="False">
+    <ContentPage.Content>
+
+        <StackLayout Spacing="15"
+                     HorizontalOptions="Center"
+                     VerticalOptions="Center">
+
+            <Button Text="Visualizza navette"
+                    BackgroundColor="{StaticResource Blue}"
+                    Clicked="OpenShuttleListPage" />
+
+            <Button Text="Aggiungi navetta"
+                    BackgroundColor="{StaticResource Green}"
+                    Clicked="AddShuttlePage" />
+
+            <Button Text="Aggiorna navetta"
+                    BackgroundColor="{StaticResource Orange}"
+                    Clicked="UpdateShuttle" />
+
+            <Button Text="Cancella navetta"
+                    BackgroundColor="{StaticResource Red}"
+                    Clicked="DeleteShuttle" />
+        </StackLayout>
+    </ContentPage.Content>
+</ContentPage>

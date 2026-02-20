@@ -1,0 +1,41 @@
+﻿<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:components="clr-namespace:ShuttleBookingApp.Presentation.Components"
+    x:Class="ShuttleBookingApp.Presentation.Pages.Footer.SettingsPage">
+
+    <Grid RowDefinitions="*,Auto">
+        <ScrollView Grid.Row="0">
+            <VerticalStackLayout Padding="20" Spacing="10">
+                <Label Text="ACCOUNT" Style="{StaticResource TitoliImpostazioni}" />
+                <components:SettingsItem Title="Impostazioni account" />
+
+                <Label Text="IMPOSTAZIONI" Style="{StaticResource TitoliImpostazioni}" />
+                <components:SettingsItem Title="Notifiche" />
+                <components:SettingsItem Title="Suoni">
+                    <components:SettingsItem.RightView>
+                        <Switch VerticalOptions="Center" HeightRequest="25" />
+                    </components:SettingsItem.RightView>
+                </components:SettingsItem>
+                <components:SettingsItem Title="Tema">
+                    <components:SettingsItem.RightView>
+                        <Label Text="Automatico" VerticalOptions="Center" />
+                    </components:SettingsItem.RightView>
+                </components:SettingsItem>
+
+                <Label Text="PREFERENZE" Style="{StaticResource TitoliImpostazioni}" />
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <StackLayout Grid.Row="1" Padding="20" Spacing="0">
+            <Button Text="Logout"
+                    BackgroundColor="{StaticResource Red}"
+                    TextColor="White"
+                    FontSize="16"
+                    Margin="0,0,0,20"
+                    CornerRadius="8"
+                    FontAttributes="Bold"
+                    Clicked="OnLogoutButtonClicked" />
+        </StackLayout>
+    </Grid>
+</ContentPage>
