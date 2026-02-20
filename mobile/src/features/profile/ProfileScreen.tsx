@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { StaticProfileRepository } from '../../api/profileRepository';
+import { createProfileRepository } from '../../api/profileRepository';
 import { PageContainer } from '../../components/PageContainer';
 import { SectionTitle } from '../../components/SectionTitle';
 import { colors } from '../../theme/colors';
 import type { UserProfile } from '../../types/domain';
 
-const repository = new StaticProfileRepository();
+const repository = createProfileRepository();
 
 type RowProps = {
   label: string;

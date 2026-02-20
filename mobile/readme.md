@@ -38,6 +38,23 @@ Per Expo Go:
 1. Apri Expo Go su dispositivo.
 2. Scansiona il QR code mostrato da `npm run start`.
 
+
+## Configurazione API
+
+Di default il client mobile usa l'API reale:
+
+- `EXPO_PUBLIC_API_BASE_URL` (default `http://localhost:5256`)
+- `EXPO_PUBLIC_PROFILE_EMAIL` (default `demo@shuttlebooking.app`)
+- `EXPO_PUBLIC_MOCK_MODE=true` per forzare repository statici solo in demo/test
+
+Esempio:
+
+```bash
+EXPO_PUBLIC_API_BASE_URL=http://192.168.1.10:5256 \
+EXPO_PUBLIC_PROFILE_EMAIL=utente@azienda.it \
+npm run start
+```
+
 ## Qualità codice
 
 ```bash

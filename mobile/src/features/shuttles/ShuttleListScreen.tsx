@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text } from 'react-native';
 
-import { StaticShuttleRepository } from '../../api/shuttleRepository';
+import { createShuttleRepository } from '../../api/shuttleRepository';
 import { PageContainer } from '../../components/PageContainer';
 import { SectionTitle } from '../../components/SectionTitle';
 import { colors } from '../../theme/colors';
 import type { Shuttle } from '../../types/domain';
 import { ShuttleCard } from './ShuttleCard';
 
-const repository = new StaticShuttleRepository();
+const repository = createShuttleRepository();
 
 export function ShuttleListScreen() {
   const [items, setItems] = useState<Shuttle[]>([]);
