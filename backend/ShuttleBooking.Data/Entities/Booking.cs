@@ -1,4 +1,4 @@
-﻿namespace ShuttleBooking.Data.Entities;
+namespace ShuttleBooking.Data.Entities;
 
 public class Booking
 {
@@ -6,4 +6,7 @@ public class Booking
     public int UserId { get; set; }
     public int ShuttleId { get; set; }
     public DateTime Date { get; set; }
+
+    public User? User { get; set; }
+    public Shuttle? Shuttle { get; set; }
 }

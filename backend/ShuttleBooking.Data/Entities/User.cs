@@ -1,8 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
 namespace ShuttleBooking.Data.Entities;
 
+[Index(nameof(Email), IsUnique = true)]
 public class User
 {
     [Key]
@@ -28,4 +30,6 @@ public class User
     [MaxLength(255)] public string? Address { get; set; }
 
     [Required] [MaxLength(100)] public required string City { get; set; }
+
+    public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
 }

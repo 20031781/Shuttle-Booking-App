@@ -12,26 +12,29 @@ public class UserService(
 {
     public async Task<UserDto?> GetUserByEmailAsync(string email)
     {
-        var user = await userRepository.GetByEmailAsync(email);
+        var normalizedEmail = NormalizeEmail(email);
+        var user = await userRepository.GetByEmailAsync(normalizedEmail);
         return user == null ? null : MapToDto(user);
     }
 
     public async Task<UserDto> RegisterUserAsync(RegisterUserRequest request)
     {
-        if (await userRepository.ExistsByEmailAsync(request.Email))
-            throw new InvalidOperationException($"Un utente con l'email {request.Email} esiste già");
+        var normalizedEmail = NormalizeEmail(request.Email);
+
+        if (await userRepository.ExistsByEmailAsync(normalizedEmail))
+            throw new InvalidOperationException($"Un utente con l'email {normalizedEmail} esiste già");
 
         var user = new User
         {
-            Email = request.Email,
-            FirstName = request.FirstName,
-            LastName = request.LastName,
-            AuthProvider = request.AuthProvider,
+            Email = normalizedEmail,
+            FirstName = request.FirstName.Trim(),
+            LastName = request.LastName.Trim(),
+            AuthProvider = request.AuthProvider.Trim(),
             ProfilePicture = request.ProfilePicture,
             Phone = request.Phone,
-            PhoneCountryCode = request.PhoneCountryCode,
+            PhoneCountryCode = request.PhoneCountryCode.Trim(),
             Address = request.Address,
-            City = request.City,
+            City = request.City.Trim(),
             CreatedAt = DateTime.UtcNow
         };
 
@@ -41,14 +44,16 @@ public class UserService(
 
     public async Task<LoginResponse> LoginWithGoogleAsync(GoogleLoginRequest request)
     {
+        var normalizedEmail = NormalizeEmail(request.Email);
+
         // Valida il token di Google
-        var isValidToken = await googleAuthService.ValidateTokenAsync(request.GoogleToken, request.Email);
+        var isValidToken = await googleAuthService.ValidateTokenAsync(request.GoogleToken, normalizedEmail);
 
         if (!isValidToken)
             throw new UnauthorizedAccessException("Token Google non valido o non corrispondente all'email fornita");
 
         // Controlla se l'utente esiste
-        var user = await userRepository.GetByEmailAsync(request.Email);
+        var user = await userRepository.GetByEmailAsync(normalizedEmail);
 
         // Se l'utente non esiste, crea un nuovo utente
         if (user == null)
@@ -57,7 +62,7 @@ public class UserService(
             // Per semplicità, creiamo un utente con informazioni minime
             user = new User
             {
-                Email = request.Email,
+                Email = normalizedEmail,
                 FirstName = "Utente", // In pratica queste informazioni sarebbero ottenute dal profilo Google
                 LastName = "Google", // In pratica queste informazioni sarebbero ottenute dal profilo Google
                 AuthProvider = "Google",
@@ -70,19 +75,21 @@ public class UserService(
         }
 
         // Genera il token JWT
-        var token = jwtService.GenerateToken(user);
+        var expiration = jwtService.GetTokenExpiration();
+        var token = jwtService.GenerateToken(user, expiration);
 
         return new LoginResponse
         {
             User = MapToDto(user),
             Token = token,
-            Expiration = jwtService.GetTokenExpiration()
+            Expiration = expiration
         };
     }
 
-    private static UserDto MapToDto(User user)
-    {
-        return new UserDto
+    private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
+
+    private static UserDto MapToDto(User user) =>
+        new()
         {
             Id = user.Id,
             Email = user.Email,
@@ -96,5 +103,4 @@ public class UserService(
             Address = user.Address,
             City = user.City
         };
-    }
 }

@@ -1,40 +1,65 @@
 using System.Net.Http.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace ShuttleBooking.Business.Services;
 
-public class GoogleAuthService(HttpClient httpClient, IConfiguration configuration) : IGoogleAuthService
+public class GoogleAuthService(
+    HttpClient httpClient,
+    IConfiguration configuration,
+    ILogger<GoogleAuthService> logger) : IGoogleAuthService
 {
-    private readonly IConfiguration _configuration = configuration;
-
     public async Task<bool> ValidateTokenAsync(string token, string email)
     {
         try
         {
-            // Google token info endpoint
-            var response = await httpClient.GetAsync($"https://oauth2.googleapis.com/tokeninfo?id_token={token}");
+            var response = await httpClient.GetFromJsonAsync<GoogleTokenInfo>(
+                $"https://oauth2.googleapis.com/tokeninfo?id_token={token}");
 
-            if (!response.IsSuccessStatusCode)
+            if (response == null || string.IsNullOrWhiteSpace(response.Email)) return false;
+
+            if (!string.Equals(response.Email, email, StringComparison.OrdinalIgnoreCase)) return false;
+
+            if (!string.Equals(response.EmailVerified, bool.TrueString, StringComparison.OrdinalIgnoreCase))
                 return false;
 
-            // Deserializzare la risposta
-            var tokenInfo = await response.Content.ReadFromJsonAsync<GoogleTokenInfo>();
+            if (IsTokenExpired(response.ExpiresAtUnix)) return false;
 
-            // Verifica che l'email nel token corrisponda all'email fornita
-            if (tokenInfo == null || string.IsNullOrEmpty(tokenInfo.Email))
+            var expectedAudience = configuration["GoogleAuth:ClientId"];
+            if (!string.IsNullOrWhiteSpace(expectedAudience) &&
+                !string.Equals(response.Audience, expectedAudience, StringComparison.Ordinal))
                 return false;
 
-            return tokenInfo.Email.ToLower() == email.ToLower() && tokenInfo.EmailVerified;
+            return true;
         }
-        catch
+        catch (Exception ex)
         {
+            logger.LogWarning(ex, "Validazione token Google non riuscita");
             return false;
         }
     }
 
-    private class GoogleTokenInfo
+    private static bool IsTokenExpired(string? expiresAtUnix)
     {
-        public string? Email { get; set; }
-        public bool EmailVerified { get; set; }
+        if (!long.TryParse(expiresAtUnix, out var expirationValue)) return true;
+
+        var expiration = DateTimeOffset.FromUnixTimeSeconds(expirationValue);
+        return expiration <= DateTimeOffset.UtcNow;
+    }
+
+    private sealed class GoogleTokenInfo
+    {
+        [JsonPropertyName("email")]
+        public string? Email { get; init; }
+
+        [JsonPropertyName("email_verified")]
+        public string? EmailVerified { get; init; }
+
+        [JsonPropertyName("aud")]
+        public string? Audience { get; init; }
+
+        [JsonPropertyName("exp")]
+        public string? ExpiresAtUnix { get; init; }
     }
 }

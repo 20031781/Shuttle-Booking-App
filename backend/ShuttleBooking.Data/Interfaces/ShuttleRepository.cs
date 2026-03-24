@@ -5,15 +5,14 @@ namespace ShuttleBooking.Data.Interfaces;
 
 public class ShuttleRepository(AppDbContext context) : IShuttleRepository
 {
-    public async Task<IEnumerable<Shuttle>> GetAllShuttlesAsync()
-    {
-        return await context.Shuttles.ToListAsync();
-    }
+    public async Task<IEnumerable<Shuttle>> GetAllShuttlesAsync() =>
+        await context.Shuttles
+            .AsNoTracking()
+            .OrderBy(s => s.Name)
+            .ToListAsync();
 
-    public async Task<Shuttle> GetShuttleByIdAsync(int id)
-    {
-        return await context.Shuttles.FindAsync(id) ?? Shuttle.Empty;
-    }
+    public async Task<Shuttle?> GetShuttleByIdAsync(int id) =>
+        await context.Shuttles.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id);
 
     public async Task<Shuttle> CreateShuttleAsync(Shuttle shuttle)
     {
@@ -32,10 +31,7 @@ public class ShuttleRepository(AppDbContext context) : IShuttleRepository
     public async Task<bool> DeleteShuttleAsync(int id)
     {
         var shuttle = await context.Shuttles.FindAsync(id);
-        if (shuttle == null)
-        {
-            return false;
-        }
+        if (shuttle == null) return false;
 
         context.Shuttles.Remove(shuttle);
         await context.SaveChangesAsync();

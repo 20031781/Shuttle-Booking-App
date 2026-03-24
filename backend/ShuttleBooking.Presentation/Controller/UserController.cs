@@ -1,4 +1,3 @@
-﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShuttleBooking.Business.Models;
 using ShuttleBooking.Business.Models.User;
@@ -25,28 +24,19 @@ public class UserController(IUserService userService) : ControllerBase
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Register([FromBody] RegisterUserRequest request)
+    public async Task<ActionResult<UserDto>> Register([FromBody] RegisterUserRequest request)
     {
         try
         {
             var user = await userService.RegisterUserAsync(request);
-            return Created($"/user/byEmail/{user.Email}", user);
+            return CreatedAtAction(nameof(GetByEmail), new { email = user.Email }, user);
         }
         catch (InvalidOperationException ex)
         {
-            Console.WriteLine("Tentativo di registrazione con email già esistente");
             return Conflict(new ErrorResponse
             {
                 Message = ex.Message,
                 StatusCode = StatusCodes.Status409Conflict
-            });
-        }
-        catch (Exception)
-        {
-            return BadRequest(new ErrorResponse
-            {
-                Message = "Errore durante la registrazione dell'utente",
-                StatusCode = StatusCodes.Status400BadRequest
             });
         }
     }
@@ -63,7 +53,7 @@ public class UserController(IUserService userService) : ControllerBase
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> LoginWithGoogle([FromBody] GoogleLoginRequest request)
+    public async Task<ActionResult<LoginResponse>> LoginWithGoogle([FromBody] GoogleLoginRequest request)
     {
         try
         {
@@ -78,14 +68,6 @@ public class UserController(IUserService userService) : ControllerBase
                 StatusCode = StatusCodes.Status401Unauthorized
             });
         }
-        catch (Exception)
-        {
-            return BadRequest(new ErrorResponse
-            {
-                Message = "Errore durante il login con Google",
-                StatusCode = StatusCodes.Status400BadRequest
-            });
-        }
     }
 
     /// <summary>
@@ -96,31 +78,18 @@ public class UserController(IUserService userService) : ControllerBase
     /// <response code="200">Utente trovato.</response>
     /// <response code="404">Utente non trovato.</response>
     [HttpGet("byEmail/{email}")]
-    // [Authorize]
-    // [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
-    // [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetByEmail(string email)
+    [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<UserDto>> GetByEmail(string email)
     {
-        try
-        {
-            var user = await userService.GetUserByEmailAsync(email);
+        var user = await userService.GetUserByEmailAsync(email);
 
-            if (user == null)
-                return NotFound(new ErrorResponse
-                {
-                    Message = $"Utente con email {email} non trovato",
-                    StatusCode = StatusCodes.Status404NotFound
-                });
+        if (user != null) return Ok(user);
 
-            return Ok(user);
-        }
-        catch (Exception)
+        return NotFound(new ErrorResponse
         {
-            return BadRequest(new ErrorResponse
-            {
-                Message = "Errore durante il recupero dell'utente",
-                StatusCode = StatusCodes.Status400BadRequest
-            });
-        }
+            Message = $"Utente con email {email} non trovato",
+            StatusCode = StatusCodes.Status404NotFound
+        });
     }
 }

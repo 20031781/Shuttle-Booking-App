@@ -9,7 +9,7 @@ namespace ShuttleBooking.Business.Services;
 
 public class JwtService(IConfiguration configuration) : IJwtService
 {
-    public string GenerateToken(User user)
+    public string GenerateToken(User user, DateTime expiresAtUtc)
     {
         var issuer = configuration["Jwt:Issuer"];
         var audience = configuration["Jwt:Audience"];
@@ -22,10 +22,9 @@ public class JwtService(IConfiguration configuration) : IJwtService
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(ClaimTypes.Name, $"{user.FirstName} {user.LastName}"),
-                new Claim("userId", user.Id.ToString())
+                new Claim(ClaimTypes.Name, $"{user.FirstName} {user.LastName}"), new Claim("userId", user.Id.ToString())
             ]),
-            Expires = GetTokenExpiration(),
+            Expires = expiresAtUtc,
             Issuer = issuer,
             Audience = audience,
             SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256)
@@ -39,6 +38,9 @@ public class JwtService(IConfiguration configuration) : IJwtService
 
     public DateTime GetTokenExpiration()
     {
-        return DateTime.UtcNow.AddDays(7);
+        var expiryInDays = configuration.GetValue<int?>("Jwt:ExpiryInDays") ?? 7;
+        if (expiryInDays < 1) expiryInDays = 1;
+
+        return DateTime.UtcNow.AddDays(expiryInDays);
     }
 }

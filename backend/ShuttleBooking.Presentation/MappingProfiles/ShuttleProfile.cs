@@ -2,21 +2,21 @@
 using ShuttleBooking.Business.DTOs;
 using ShuttleBooking.Data.Entities;
 
-namespace ShuttleBooking.Presentation.MappingProfiles
+namespace ShuttleBooking.Presentation.MappingProfiles;
+
+/// <summary>
+///     Profilo di mappatura per la classe Shuttle.
+/// </summary>
+public class ShuttleProfile : Profile
 {
     /// <summary>
-    /// Profilo di mappatura per la classe Shuttle.
+    ///     Inizializza una nuova istanza della classe <see cref="ShuttleProfile" />.
+    ///     Configura le mappe tra <see cref="Shuttle" /> e <see cref="ShuttleDto" />.
     /// </summary>
-    public class ShuttleProfile : Profile
+    public ShuttleProfile()
     {
-        /// <summary>
-        /// Inizializza una nuova istanza della classe <see cref="ShuttleProfile"/>.
-        /// Configura le mappe tra <see cref="Shuttle"/> e <see cref="ShuttleDto"/>.
-        /// </summary>
-        public ShuttleProfile()
-        {
-            CreateMap<Shuttle, ShuttleDto>();
-            CreateMap<ShuttleDto, Shuttle>();
-        }
+        CreateMap<Shuttle, ShuttleDto>();
+        CreateMap<ShuttleDto, Shuttle>()
+            .ForMember(destination => destination.Bookings, options => options.Ignore());
     }
 }

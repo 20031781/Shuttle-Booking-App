@@ -3,5 +3,11 @@ node_modules/
 .expo-shared/
 dist/
 web-build/
+.idea/
+.vs/
+*.DotSettings.user
+*.user
+**/bin/
+**/obj/
 *.log
 .DS_Store

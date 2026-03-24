@@ -66,6 +66,8 @@ secrets.json
 coverage/
 *.coverage
 *.coveragexml
+ShuttleBooking.Tests/TestResults/
+**/coverage.cobertura.xml
 
 # Project files
 *.csproj.user

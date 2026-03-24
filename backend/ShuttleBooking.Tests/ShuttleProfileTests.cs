@@ -1,4 +1,5 @@
-﻿using AutoMapper;
+using AutoMapper;
+using Microsoft.Extensions.Logging.Abstractions;
 using ShuttleBooking.Business.DTOs;
 using ShuttleBooking.Data.Entities;
 using ShuttleBooking.Presentation.MappingProfiles;
@@ -11,17 +12,15 @@ public class ShuttleProfileTests
 
     public ShuttleProfileTests()
     {
-        var config = new MapperConfiguration(cfg => { cfg.AddProfile<ShuttleProfile>(); });
+        var config = new MapperConfiguration(cfg => { cfg.AddProfile<ShuttleProfile>(); }, NullLoggerFactory.Instance);
 
         _mapper = config.CreateMapper();
     }
 
     [Fact]
-    public void Map_ShuttleToShuttleDto_ShouldHaveValidConfiguration()
-    {
+    public void Map_ShuttleToShuttleDto_ShouldHaveValidConfiguration() =>
         // Act
         _mapper.ConfigurationProvider.AssertConfigurationIsValid();
-    }
 
     [Fact]
     public void Map_ShuttleToShuttleDto_ShouldMapCorrectly()

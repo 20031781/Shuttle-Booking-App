@@ -18,7 +18,7 @@ public class ShuttleService(
     public async Task<ShuttleDto?> GetShuttleByIdAsync(int id)
     {
         var shuttle = await shuttleRepository.GetShuttleByIdAsync(id);
-        return shuttle == Shuttle.Empty
+        return shuttle == null
             ? null
             : new ShuttleDto { Id = shuttle.Id, Name = shuttle.Name, Capacity = shuttle.Capacity };
     }
@@ -27,7 +27,7 @@ public class ShuttleService(
     {
         var shuttle = new Shuttle
         {
-            Name = createShuttleDto.Name,
+            Name = createShuttleDto.Name.Trim(),
             Capacity = createShuttleDto.Capacity
         };
 
@@ -40,15 +40,12 @@ public class ShuttleService(
             Capacity = createdShuttle.Capacity
         };
     }
-    
+
     public async Task<ShuttleDto?> UpdateShuttleCapacityAsync(int id, int newCapacity)
     {
         var shuttle = await shuttleRepository.GetShuttleByIdAsync(id);
-        
-        if (shuttle == Shuttle.Empty)
-        {
-            return null;
-        }
+
+        if (shuttle == null) return null;
 
         shuttle.Capacity = newCapacity;
 
@@ -61,9 +58,6 @@ public class ShuttleService(
             Capacity = updatedShuttle.Capacity
         };
     }
-    
-    public async Task<bool> DeleteShuttleAsync(int id)
-    {
-        return await shuttleRepository.DeleteShuttleAsync(id);
-    }
+
+    public async Task<bool> DeleteShuttleAsync(int id) => await shuttleRepository.DeleteShuttleAsync(id);
 }

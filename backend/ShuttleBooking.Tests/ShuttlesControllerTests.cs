@@ -1,19 +1,40 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using ShuttleBooking.Business.DTOs;
+using ShuttleBooking.Data;
 
 namespace ShuttleBooking.Tests;
 
-public class ProgramTest : IClassFixture<WebApplicationFactory<Program>>
+public class CustomWebApplicationFactory : WebApplicationFactory<Program>
+{
+    private readonly string _databaseName = $"ShuttleBookingTests_{Guid.NewGuid()}";
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+        builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<DbContextOptions<AppDbContext>>();
+            services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+            services.RemoveAll<AppDbContext>();
+
+            services.AddDbContext<AppDbContext>(options => { options.UseInMemoryDatabase(_databaseName); });
+        });
+}
+
+public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
 {
     private const string RequestBase = "/Shuttles/";
     private readonly HttpClient _client;
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly CustomWebApplicationFactory _factory;
 
-    public ProgramTest(WebApplicationFactory<Program> factory)
+    public ProgramTest(CustomWebApplicationFactory factory)
     {
         _factory = factory;
         // Create a client to send HTTP requests to the test server
@@ -51,9 +72,10 @@ public class ProgramTest : IClassFixture<WebApplicationFactory<Program>>
     public async Task GetShuttleById_ReturnsOk_ForValidId()
     {
         // Arrange
-        var createShuttleDto = new CreateShuttleDto(10)
+        var createShuttleDto = new CreateShuttleDto
         {
-            Name = "Test Shuttle"
+            Name = "Test Shuttle",
+            Capacity = 10
         };
 
         // Creazione dello shuttle per avere un ID valido
@@ -84,9 +106,10 @@ public class ProgramTest : IClassFixture<WebApplicationFactory<Program>>
     public async Task CreateShuttle_ReturnsCreatedStatus_WithValidData()
     {
         // Arrange
-        var createShuttleDto = new CreateShuttleDto(50)
+        var createShuttleDto = new CreateShuttleDto
         {
-            Name = "Test Shuttle"
+            Name = "Test Shuttle",
+            Capacity = 50
         };
         const string request = RequestBase + "CreateShuttle";
 
@@ -122,8 +145,9 @@ public class ProgramTest : IClassFixture<WebApplicationFactory<Program>>
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var errorResponse = await response.Content.ReadAsStringAsync(); // Leggi come stringa
-        errorResponse.Should().Be("Dati dello shuttle nulli.");
+        var errorResponse = await response.Content.ReadFromJsonAsync<Dictionary<string, JsonElement>>();
+        errorResponse.Should().NotBeNull();
+        errorResponse!["message"].GetString().Should().Be("Dati dello shuttle nulli.");
     }
 
     [Fact]
@@ -134,7 +158,8 @@ public class ProgramTest : IClassFixture<WebApplicationFactory<Program>>
         const string request = RequestBase + "UpdateShuttle/1";
 
         // Act
-        var response = await _client.PutAsJsonAsync(request, invalidCapacity);
+        var response =
+            await _client.PutAsJsonAsync(request, new UpdateShuttleCapacityRequest { Capacity = invalidCapacity });
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -145,9 +170,10 @@ public class ProgramTest : IClassFixture<WebApplicationFactory<Program>>
     {
         // Arrange
         // Creo un nuovo shuttle utilizzando l'endpoint CreateShuttle
-        var createShuttleDto = new CreateShuttleDto(10)
+        var createShuttleDto = new CreateShuttleDto
         {
-            Name = "Test Shuttle"
+            Name = "Test Shuttle",
+            Capacity = 10
         };
 
         const string createRequest = RequestBase + "CreateShuttle";
@@ -162,7 +188,8 @@ public class ProgramTest : IClassFixture<WebApplicationFactory<Program>>
         var updateRequest = RequestBase + $"UpdateShuttle/{shuttleId}";
 
         // Act
-        var response = await _client.PutAsJsonAsync(updateRequest, newCapacity);
+        var response =
+            await _client.PutAsJsonAsync(updateRequest, new UpdateShuttleCapacityRequest { Capacity = newCapacity });
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -180,9 +207,10 @@ public class ProgramTest : IClassFixture<WebApplicationFactory<Program>>
     {
         // Arrange
         // Creo un nuovo shuttle utilizzando l'endpoint CreateShuttle
-        var createShuttleDto = new CreateShuttleDto(10)
+        var createShuttleDto = new CreateShuttleDto
         {
-            Name = "Test Shuttle"
+            Name = "Test Shuttle",
+            Capacity = 10
         };
 
         const string createRequest = RequestBase + "CreateShuttle";
@@ -197,7 +225,8 @@ public class ProgramTest : IClassFixture<WebApplicationFactory<Program>>
         var updateRequest = RequestBase + $"UpdateShuttle/{shuttleId}";
 
         // Act
-        var response = await _client.PutAsJsonAsync(updateRequest, invalidCapacity);
+        var response = await _client.PutAsJsonAsync(updateRequest,
+            new UpdateShuttleCapacityRequest { Capacity = invalidCapacity });
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -216,7 +245,8 @@ public class ProgramTest : IClassFixture<WebApplicationFactory<Program>>
         var updateRequest = RequestBase + $"UpdateShuttle/{invalidId}";
 
         // Act
-        var response = await _client.PutAsJsonAsync(updateRequest, newCapacity);
+        var response =
+            await _client.PutAsJsonAsync(updateRequest, new UpdateShuttleCapacityRequest { Capacity = newCapacity });
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -227,9 +257,10 @@ public class ProgramTest : IClassFixture<WebApplicationFactory<Program>>
     {
         // Arrange
         // Creo un nuovo shuttle utilizzando l'endpoint CreateShuttle
-        var createShuttleDto = new CreateShuttleDto(10)
+        var createShuttleDto = new CreateShuttleDto
         {
-            Name = "Test Shuttle"
+            Name = "Test Shuttle",
+            Capacity = 10
         };
 
         const string createRequest = RequestBase + "CreateShuttle";
@@ -252,7 +283,7 @@ public class ProgramTest : IClassFixture<WebApplicationFactory<Program>>
         result.Should().BeTrue();
 
         // Verifico che lo shuttle non esista più
-        var deletedShuttleResponse = await _client.GetAsync(RequestBase + shuttleId);
+        var deletedShuttleResponse = await _client.GetAsync(RequestBase + $"GetShuttle/{shuttleId}");
         deletedShuttleResponse.StatusCode.Should()
             .Be(HttpStatusCode.NotFound); // Verifica che il shuttle non esista più
     }
@@ -268,9 +299,9 @@ public class ProgramTest : IClassFixture<WebApplicationFactory<Program>>
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        var errorResponse = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
-        errorResponse.Should().ContainKey("message"); // Modificato a "message"
-        errorResponse?["message"].Should().Be("Shuttle con ID 99999 non trovato."); // Modificato a "message"
+        var errorResponse = await response.Content.ReadFromJsonAsync<Dictionary<string, JsonElement>>();
+        errorResponse.Should().ContainKey("message");
+        errorResponse?["message"].GetString().Should().Be("Shuttle con ID 99999 non trovato.");
     }
 
     [Fact]
