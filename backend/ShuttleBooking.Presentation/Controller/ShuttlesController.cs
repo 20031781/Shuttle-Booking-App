@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using ShuttleBooking.Business.DTOs;
 using ShuttleBooking.Business.Interfaces;
 using ShuttleBooking.Business.Models;
@@ -15,12 +15,13 @@ public class ShuttlesController(IShuttleService shuttleService) : ControllerBase
     /// <summary>
     ///     Ottiene tutti gli shuttle.
     /// </summary>
+    /// <param name="date">Data opzionale per calcolare i posti residui.</param>
     /// <returns>Una lista di shuttles.</returns>
     [ProducesResponseType(typeof(IEnumerable<ShuttleDto>), StatusCodes.Status200OK)]
     [HttpGet("GetShuttles")]
-    public async Task<ActionResult<IEnumerable<ShuttleDto>>> GetAllShuttles()
+    public async Task<ActionResult<IEnumerable<ShuttleDto>>> GetAllShuttles([FromQuery] DateTime? date = null)
     {
-        var shuttles = await shuttleService.GetAllShuttlesAsync();
+        var shuttles = await shuttleService.GetAllShuttlesAsync(date);
         return Ok(shuttles);
     }
 

@@ -1,4 +1,4 @@
-﻿using ShuttleBooking.Business.DTOs;
+using ShuttleBooking.Business.DTOs;
 
 namespace ShuttleBooking.Business.Interfaces;
 
@@ -11,7 +11,7 @@ public interface IShuttleService
     ///     Ottiene tutti gli shuttle.
     /// </summary>
     /// <returns>Una lista di <see cref="ShuttleDto" />.</returns>
-    Task<IEnumerable<ShuttleDto>> GetAllShuttlesAsync();
+    Task<IEnumerable<ShuttleDto>> GetAllShuttlesAsync(DateTime? date = null);
 
     /// <summary>
     ///     Ottiene uno shuttle tramite ID.

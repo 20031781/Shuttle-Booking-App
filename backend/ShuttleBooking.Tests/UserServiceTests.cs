@@ -1,0 +1,102 @@
+using FluentAssertions;
+using Moq;
+using ShuttleBooking.Business.Models.User;
+using ShuttleBooking.Business.Services;
+using ShuttleBooking.Data.Entities;
+using ShuttleBooking.Data.Interfaces;
+
+namespace ShuttleBooking.Tests;
+
+public class UserServiceTests
+{
+    private readonly Mock<IGoogleAuthService> _googleAuthServiceMock = new();
+    private readonly Mock<IJwtService> _jwtServiceMock = new();
+    private readonly Mock<IUserRepository> _userRepositoryMock = new();
+
+    [Fact]
+    public async Task RegisterUserAsync_Throws_WhenEmailAlreadyExists()
+    {
+        _userRepositoryMock
+            .Setup(repository => repository.ExistsByEmailAsync("utente@test.it"))
+            .ReturnsAsync(true);
+
+        var userService = CreateService();
+
+        var action = async () => await userService.RegisterUserAsync(new RegisterUserRequest
+        {
+            Email = "utente@test.it",
+            FirstName = "Mario",
+            LastName = "Rossi",
+            AuthProvider = "App",
+            PhoneCountryCode = "+39",
+            City = "Roma"
+        });
+
+        await action.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task LoginWithGoogleAsync_Throws_WhenTokenIsInvalid()
+    {
+        _googleAuthServiceMock
+            .Setup(service => service.ValidateTokenAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(false);
+
+        var userService = CreateService();
+
+        var action = async () => await userService.LoginWithGoogleAsync(new GoogleLoginRequest
+        {
+            Email = "utente@test.it",
+            GoogleToken = "invalid-token"
+        });
+
+        await action.Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    [Fact]
+    public async Task LoginWithGoogleAsync_CreatesUser_WhenNotExists()
+    {
+        var now = DateTime.UtcNow;
+
+        _googleAuthServiceMock
+            .Setup(service => service.ValidateTokenAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(true);
+
+        _userRepositoryMock
+            .Setup(repository => repository.GetByEmailAsync("utente@test.it"))
+            .ReturnsAsync((User?)null);
+
+        _userRepositoryMock
+            .Setup(repository => repository.CreateAsync(It.IsAny<User>()))
+            .ReturnsAsync((User user) =>
+            {
+                user.Id = 42;
+                return user;
+            });
+
+        _jwtServiceMock
+            .Setup(service => service.GetTokenExpiration())
+            .Returns(now.AddDays(7));
+
+        _jwtServiceMock
+            .Setup(service => service.GenerateToken(It.IsAny<User>(), It.IsAny<DateTime>()))
+            .Returns("jwt-token");
+
+        var userService = CreateService();
+        var response = await userService.LoginWithGoogleAsync(new GoogleLoginRequest
+        {
+            Email = "utente@test.it",
+            GoogleToken = "valid-token"
+        });
+
+        response.Token.Should().Be("jwt-token");
+        response.User.Email.Should().Be("utente@test.it");
+        response.User.AuthProvider.Should().Be("Google");
+        response.User.Id.Should().Be(42);
+
+        _userRepositoryMock.Verify(repository => repository.CreateAsync(It.IsAny<User>()), Times.Once);
+    }
+
+    private UserService CreateService() =>
+        new(_userRepositoryMock.Object, _jwtServiceMock.Object, _googleAuthServiceMock.Object);
+}

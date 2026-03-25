@@ -1,4 +1,4 @@
-﻿using ShuttleBooking.Business.DTOs;
+using ShuttleBooking.Business.DTOs;
 using ShuttleBooking.Business.Interfaces;
 using ShuttleBooking.Data.Entities;
 using ShuttleBooking.Data.Interfaces;
@@ -6,21 +6,43 @@ using ShuttleBooking.Data.Interfaces;
 namespace ShuttleBooking.Business.Services;
 
 public class ShuttleService(
-    IShuttleRepository shuttleRepository
-) : IShuttleService
+    IShuttleRepository shuttleRepository,
+    IBookingRepository bookingRepository) : IShuttleService
 {
-    public async Task<IEnumerable<ShuttleDto>> GetAllShuttlesAsync()
+    public async Task<IEnumerable<ShuttleDto>> GetAllShuttlesAsync(DateTime? date = null)
     {
+        var requestedDate = date?.Date ?? DateTime.UtcNow.Date;
         var shuttles = await shuttleRepository.GetAllShuttlesAsync();
-        return shuttles.Select(s => new ShuttleDto { Id = s.Id, Name = s.Name, Capacity = s.Capacity });
+        var countsByShuttle = await bookingRepository.GetActiveBookingCountsByDateAsync(requestedDate);
+
+        return shuttles.Select(shuttle =>
+        {
+            countsByShuttle.TryGetValue(shuttle.Id, out var activeCount);
+
+            return new ShuttleDto
+            {
+                Id = shuttle.Id,
+                Name = shuttle.Name,
+                Capacity = shuttle.Capacity,
+                AvailableSeats = Math.Max(0, shuttle.Capacity - activeCount)
+            };
+        });
     }
 
     public async Task<ShuttleDto?> GetShuttleByIdAsync(int id)
     {
         var shuttle = await shuttleRepository.GetShuttleByIdAsync(id);
-        return shuttle == null
-            ? null
-            : new ShuttleDto { Id = shuttle.Id, Name = shuttle.Name, Capacity = shuttle.Capacity };
+        if (shuttle == null) return null;
+
+        var activeCount = await bookingRepository.GetActiveBookingCountAsync(shuttle.Id, DateTime.UtcNow.Date);
+
+        return new ShuttleDto
+        {
+            Id = shuttle.Id,
+            Name = shuttle.Name,
+            Capacity = shuttle.Capacity,
+            AvailableSeats = Math.Max(0, shuttle.Capacity - activeCount)
+        };
     }
 
     public async Task<ShuttleDto> CreateShuttleAsync(CreateShuttleDto createShuttleDto)
@@ -37,25 +59,27 @@ public class ShuttleService(
         {
             Id = createdShuttle.Id,
             Name = createdShuttle.Name,
-            Capacity = createdShuttle.Capacity
+            Capacity = createdShuttle.Capacity,
+            AvailableSeats = createdShuttle.Capacity
         };
     }
 
     public async Task<ShuttleDto?> UpdateShuttleCapacityAsync(int id, int newCapacity)
     {
         var shuttle = await shuttleRepository.GetShuttleByIdAsync(id);
-
         if (shuttle == null) return null;
 
         shuttle.Capacity = newCapacity;
 
         var updatedShuttle = await shuttleRepository.UpdateShuttleAsync(shuttle);
+        var activeCount = await bookingRepository.GetActiveBookingCountAsync(updatedShuttle.Id, DateTime.UtcNow.Date);
 
         return new ShuttleDto
         {
             Id = updatedShuttle.Id,
             Name = updatedShuttle.Name,
-            Capacity = updatedShuttle.Capacity
+            Capacity = updatedShuttle.Capacity,
+            AvailableSeats = Math.Max(0, updatedShuttle.Capacity - activeCount)
         };
     }
 

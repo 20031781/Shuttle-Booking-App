@@ -10,3 +10,14 @@ export type UserProfile = {
   email: string;
   company: string;
 };
+
+export type BookingStatus = 'active' | 'canceled';
+
+export type Booking = {
+  id: string;
+  shuttleId: string;
+  shuttleName: string;
+  date: string;
+  status: BookingStatus;
+  seatsRemaining?: number;
+};

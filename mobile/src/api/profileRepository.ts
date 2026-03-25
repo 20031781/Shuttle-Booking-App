@@ -1,4 +1,5 @@
 import type { UserProfile } from '../types/domain';
+import { t } from '../i18n';
 import { apiConfig } from './config';
 import { getJson } from './httpClient';
 
@@ -14,9 +15,9 @@ type UserApiResponse = {
 };
 
 const fallbackProfile: UserProfile = {
-  fullName: 'Utente Demo',
-  email: 'demo@shuttlebooking.app',
-  company: 'Shuttle Booking'
+  fullName: t.profile.fallback.fullName,
+  email: t.profile.fallback.email,
+  company: t.profile.fallback.company
 };
 
 export class ApiProfileRepository implements ProfileRepository {

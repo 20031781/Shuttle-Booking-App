@@ -6,6 +6,9 @@ public class Booking
     public int UserId { get; set; }
     public int ShuttleId { get; set; }
     public DateTime Date { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public bool IsCanceled { get; set; }
+    public DateTime? CanceledAt { get; set; }
 
     public User? User { get; set; }
     public Shuttle? Shuttle { get; set; }

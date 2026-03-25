@@ -1,10 +1,12 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { t } from '../../i18n';
 import { colors } from '../../theme/colors';
+import { BookingHistoryScreen } from '../bookings/BookingHistoryScreen';
 import { ProfileScreen } from '../profile/ProfileScreen';
 import { ShuttleListScreen } from '../shuttles/ShuttleListScreen';
 
-export type AppSection = 'Shuttle' | 'Profilo';
+export type AppSection = 'shuttle' | 'bookings' | 'profile';
 
 type AppNavigatorProps = {
   section: AppSection;
@@ -12,17 +14,17 @@ type AppNavigatorProps = {
 };
 
 function TabButton({
-  title,
+  label,
   active,
   onPress
 }: {
-  title: AppSection;
+  label: string;
   active: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable style={[styles.tab, active && styles.tabActive]} onPress={onPress}>
-      <Text style={[styles.tabText, active && styles.tabTextActive]}>{title}</Text>
+      <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
     </Pressable>
   );
 }
@@ -30,10 +32,31 @@ function TabButton({
 export function AppNavigator({ section, onSectionChange }: AppNavigatorProps) {
   return (
     <View style={styles.wrapper}>
-      <View style={styles.content}>{section === 'Shuttle' ? <ShuttleListScreen /> : <ProfileScreen />}</View>
+      <View style={styles.content}>
+        {section === 'shuttle' ? (
+          <ShuttleListScreen />
+        ) : section === 'bookings' ? (
+          <BookingHistoryScreen />
+        ) : (
+          <ProfileScreen />
+        )}
+      </View>
       <View style={styles.tabs}>
-        <TabButton title="Shuttle" active={section === 'Shuttle'} onPress={() => onSectionChange('Shuttle')} />
-        <TabButton title="Profilo" active={section === 'Profilo'} onPress={() => onSectionChange('Profilo')} />
+        <TabButton
+          label={t.app.sections.shuttle}
+          active={section === 'shuttle'}
+          onPress={() => onSectionChange('shuttle')}
+        />
+        <TabButton
+          label={t.app.sections.bookings}
+          active={section === 'bookings'}
+          onPress={() => onSectionChange('bookings')}
+        />
+        <TabButton
+          label={t.app.sections.profile}
+          active={section === 'profile'}
+          onPress={() => onSectionChange('profile')}
+        />
       </View>
     </View>
   );
@@ -55,7 +78,7 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 12,
     alignItems: 'center'
   },
   tabActive: {

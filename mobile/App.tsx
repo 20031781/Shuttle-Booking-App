@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { AppNavigator, type AppSection } from './src/features/navigation/AppNavigator';
 
 export default function App() {
-  const [section, setSection] = useState<AppSection>('Shuttle');
+  const [section, setSection] = useState<AppSection>('shuttle');
 
   return (
     <>

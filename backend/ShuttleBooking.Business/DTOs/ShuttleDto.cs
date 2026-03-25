@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace ShuttleBooking.Business.DTOs;
 
@@ -12,6 +12,9 @@ public class ShuttleDto
 
     [Range(1, 100, ErrorMessage = "La capacità deve essere maggiore di zero.")]
     public int Capacity { get; init; }
+
+    [Range(0, 100, ErrorMessage = "I posti disponibili devono essere compresi tra 0 e 100.")]
+    public int AvailableSeats { get; init; }
 }
 
 public class CreateShuttleDto

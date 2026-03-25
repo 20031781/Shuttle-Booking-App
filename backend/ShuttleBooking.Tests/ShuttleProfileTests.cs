@@ -41,6 +41,7 @@ public class ShuttleProfileTests
         Assert.Equal(shuttle.Id, shuttleDto.Id);
         Assert.Equal(shuttle.Name, shuttleDto.Name);
         Assert.Equal(shuttle.Capacity, shuttleDto.Capacity);
+        Assert.Equal(shuttle.Capacity, shuttleDto.AvailableSeats);
     }
 
     [Fact]
@@ -51,7 +52,8 @@ public class ShuttleProfileTests
         {
             Id = 1,
             Name = "Test Shuttle",
-            Capacity = 50
+            Capacity = 50,
+            AvailableSeats = 35
         };
 
         // Act

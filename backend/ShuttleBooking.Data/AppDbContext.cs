@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ShuttleBooking.Data.Entities;
 
 namespace ShuttleBooking.Data;
@@ -24,5 +24,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany(s => s.Bookings)
             .HasForeignKey(b => b.ShuttleId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Booking>()
+            .Property(b => b.CreatedAt)
+            .HasDefaultValueSql("GETUTCDATE()");
+
+        modelBuilder.Entity<Booking>()
+            .HasIndex(b => new { b.UserId, b.ShuttleId, b.Date })
+            .HasFilter("[IsCanceled] = 0")
+            .IsUnique();
     }
 }

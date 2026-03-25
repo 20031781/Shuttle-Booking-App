@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using ShuttleBooking.Business.DTOs;
 using ShuttleBooking.Data.Entities;
 
@@ -15,7 +15,9 @@ public class ShuttleProfile : Profile
     /// </summary>
     public ShuttleProfile()
     {
-        CreateMap<Shuttle, ShuttleDto>();
+        CreateMap<Shuttle, ShuttleDto>()
+            .ForMember(destination => destination.AvailableSeats,
+                options => options.MapFrom(source => source.Capacity));
         CreateMap<ShuttleDto, Shuttle>()
             .ForMember(destination => destination.Bookings, options => options.Ignore());
     }

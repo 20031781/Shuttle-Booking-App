@@ -1,4 +1,5 @@
 import { apiConfig } from './config';
+import { t } from '../i18n';
 
 const requestTimeoutMs = 10_000;
 
@@ -6,6 +7,22 @@ type ApiErrorResponse = {
   message?: string;
   error?: string;
 };
+
+export class HttpError extends Error {
+  statusCode: number;
+
+  constructor(statusCode: number, message: string) {
+    super(message);
+    this.name = 'HttpError';
+    this.statusCode = statusCode;
+  }
+}
+
+function createAbortController() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
+  return { controller, timeout };
+}
 
 async function extractErrorMessage(response: Response): Promise<string> {
   try {
@@ -21,30 +38,67 @@ async function extractErrorMessage(response: Response): Promise<string> {
     // No-op: fallback al messaggio generico.
   }
 
-  return `Request failed: ${response.status}`;
+  return t.api.requestFailed(response.status);
 }
 
-export async function getJson<T>(path: string): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
+async function parseJson<T>(response: Response): Promise<T> {
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const raw = await response.text();
+  if (!raw) {
+    return undefined as T;
+  }
+
+  return JSON.parse(raw) as T;
+}
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const { controller, timeout } = createAbortController();
 
   try {
     const response = await fetch(`${apiConfig.baseUrl}${path}`, {
-      signal: controller.signal
+      signal: controller.signal,
+      ...init
     });
 
     if (!response.ok) {
-      throw new Error(await extractErrorMessage(response));
+      throw new HttpError(response.status, await extractErrorMessage(response));
     }
 
-    return (await response.json()) as T;
+    return await parseJson<T>(response);
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('La richiesta al server ha superato il tempo massimo di attesa.');
+      throw new Error(t.api.requestTimeout);
     }
 
     throw error;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function getJson<T>(path: string): Promise<T> {
+  return requestJson<T>(path);
+}
+
+export async function postJson<TRequest, TResponse>(path: string, body: TRequest): Promise<TResponse> {
+  return requestJson<TResponse>(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+}
+
+export async function putJson<TRequest, TResponse>(path: string, body: TRequest): Promise<TResponse> {
+  return requestJson<TResponse>(path, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
 }
