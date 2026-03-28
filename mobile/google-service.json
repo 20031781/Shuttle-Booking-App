@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "952451758708",
+    "project_id": "shuttlebooking-108ef",
+    "storage_bucket": "shuttlebooking-108ef.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:952451758708:android:98eee96f7fe5f1a785ef21",
+        "android_client_info": {
+          "package_name": "com.shuttlebooking.com"
+        }
+      },
+      "oauth_client": [ ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6sYFDJ-pptUAwIAuy-BE0xS8_M3pldgw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [ ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

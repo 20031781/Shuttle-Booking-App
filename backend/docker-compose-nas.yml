@@ -1,0 +1,91 @@
+name: shuttlebooking-nas
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: shuttlebooking-db
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      - SA_PASSWORD=YourPassword123
+      - ACCEPT_EULA=Y
+    volumes:
+      - db_data:/var/opt/mssql
+    ports:
+      - "14331:1433"
+    networks:
+      - shuttlebooking-network
+      - proxy
+
+  api:
+    image: ${SHUTTLEBOOKING_API_IMAGE:-shuttlebookingapi:latest}
+    container_name: shuttlebooking-nas-api
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=db,1433;Database=ShuttleBookingDb;User Id=sa;Password=YourPassword123;TrustServerCertificate=True
+      - Jwt__Key=${JWT_SECRET_KEY:-superSecretKey123456789012345678901234567890}
+      - Jwt__Issuer=ShuttleBookingApi
+      - Jwt__Audience=ShuttleBookingApp
+      - Jwt__ExpiryInDays=1
+      - Jwt__RefreshExpiryInDays=30
+    ports:
+      - "5100:8080"
+      - "5101:8081"
+    networks:
+      - shuttlebooking-network
+      - proxy
+
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    pull_policy: always
+    restart: unless-stopped
+    command:
+      - "--log.level=DEBUG"
+      - "--api.dashboard=true"
+
+      # Provider Docker
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=proxy"
+
+      # Entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+
+      # Let's Encrypt (DNS-01 Cloudflare)
+      # IMPORTANTE: Sostituisci con la tua email reale se non l'hai fatto nel file .env o qui
+      - "--certificatesresolvers.le.acme.email=TUO_EMAIL@DOMINIO.IT"
+      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.le.acme.dnschallenge=true"
+      - "--certificatesresolvers.le.acme.dnschallenge.provider=cloudflare"
+
+      - "--certificatesresolvers.le.acme.dnschallenge.delaybeforecheck=120"
+      - "--certificatesresolvers.le.acme.dnschallenge.resolvers=1.1.1.1:53,1.0.0.1:53"
+      - "--certificatesresolvers.le.acme.dnschallenge.disablePropagationCheck=true"
+    environment:
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+    ports:
+      - "8080:80"
+      - "9443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt
+    networks:
+      - proxy
+
+networks:
+  shuttlebooking-network:
+    driver: bridge
+  proxy:
+    external: true
+
+volumes:
+  db_data:
+    driver: local

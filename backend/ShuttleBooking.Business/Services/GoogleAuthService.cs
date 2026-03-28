@@ -26,9 +26,17 @@ public class GoogleAuthService(
 
             if (IsTokenExpired(response.ExpiresAtUnix)) return false;
 
-            var expectedAudience = configuration["GoogleAuth:ClientId"];
-            if (!string.IsNullOrWhiteSpace(expectedAudience) &&
-                !string.Equals(response.Audience, expectedAudience, StringComparison.Ordinal))
+            var expectedAudiences = new HashSet<string>(StringComparer.Ordinal);
+            var singleAudience = configuration["GoogleAuth:ClientId"];
+            if (!string.IsNullOrWhiteSpace(singleAudience)) expectedAudiences.Add(singleAudience.Trim());
+
+            var configuredAudiences = configuration.GetSection("GoogleAuth:ClientIds").Get<string[]>();
+            if (configuredAudiences != null)
+                foreach (var audience in configuredAudiences.Where(value => !string.IsNullOrWhiteSpace(value)))
+                    expectedAudiences.Add(audience.Trim());
+
+            if (expectedAudiences.Count > 0 &&
+                (string.IsNullOrWhiteSpace(response.Audience) || !expectedAudiences.Contains(response.Audience)))
                 return false;
 
             return true;

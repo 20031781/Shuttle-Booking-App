@@ -12,10 +12,15 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "expo": "^54.0.33",
+    "@expo/vector-icons": "^15.0.3",
+    "expo": "^54.0.0",
+    "expo-auth-session": "~7.0.10",
+    "expo-notifications": "~0.32.16",
     "expo-status-bar": "~3.0.9",
+    "expo-web-browser": "~15.0.10",
     "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-native": "0.81.5",
+    "react-native-safe-area-context": "~5.6.2"
   },
   "devDependencies": {
     "@types/react": "~19.1.10",

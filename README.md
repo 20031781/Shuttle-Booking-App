@@ -27,11 +27,16 @@ Backend:
 
 ```bash
 cd backend
+docker compose up -d db
 dotnet restore
-dotnet run --project ShuttleBooking.Presentation
+dotnet run --project ShuttleBooking.Presentation --launch-profile http
 ```
 
+Nota DB Docker: per evitare conflitti con altri SQL Server locali, questo compose espone SQL Server su
+`localhost:14330` (container interno `1433`).
+
 Swagger locale: `http://localhost:5000/`
+Swagger da altri device in LAN: `http://<IP-PC>:5000/`
 
 Mobile:
 
@@ -43,7 +48,8 @@ npm run start
 
 Variabili mobile:
 
-- `EXPO_PUBLIC_API_BASE_URL` (default `http://localhost:5000`)
+- `EXPO_PUBLIC_API_BASE_URL` (opzionale: se assente, l'app prova auto-detect host dev; fallback Android
+  `http://10.0.2.2:5000`, altrimenti `http://localhost:5000`)
 - `EXPO_PUBLIC_PROFILE_EMAIL` (default `demo@shuttlebooking.app`)
 - `EXPO_PUBLIC_MOCK_MODE=true` per repository mock
 
@@ -52,6 +58,11 @@ Esempio:
 ```bash
 EXPO_PUBLIC_API_BASE_URL=http://192.168.1.10:5000 EXPO_PUBLIC_PROFILE_EMAIL=utente@azienda.it npm run start
 ```
+
+Se usi un device fisico:
+
+- backend in ascolto su `0.0.0.0:5000` (profilo `http` in `launchSettings.json`)
+- apri la porta `5000` nel firewall locale se necessario
 
 ## Migrazioni e database
 
@@ -84,29 +95,6 @@ User/Auth:
 - registrazione utente
 - login Google con token validation
 - emissione JWT
-
-## Endpoint principali
-
-Shuttle:
-
-- `GET /Shuttles/GetShuttles?date=<ISO_DATE>`
-- `GET /Shuttles/GetShuttle/{id}`
-- `POST /Shuttles/CreateShuttle`
-- `PUT /Shuttles/UpdateShuttle/{id}`
-- `DELETE /Shuttles/DeleteShuttle/{id}`
-
-Booking:
-
-- `POST /Bookings/CreateBooking`
-- `PUT /Bookings/CancelBooking/{bookingId}`
-- `GET /Bookings/GetUserHistory/{email}`
-- `GET /Bookings/GetShuttleAvailability?date=<ISO_DATE>`
-
-User/Auth:
-
-- `POST /User/register`
-- `POST /User/LoginWithGoogle`
-- `GET /User/byEmail/{email}`
 
 ## Qualità, test e CI/CD
 

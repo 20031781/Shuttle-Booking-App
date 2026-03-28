@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShuttleBooking.Business.DTOs;
 using ShuttleBooking.Business.Models;
@@ -16,15 +18,29 @@ public class BookingsController(IBookingService bookingService) : ControllerBase
     ///     Crea una nuova prenotazione.
     /// </summary>
     [HttpPost("CreateBooking")]
+    [Authorize]
     [ProducesResponseType(typeof(BookingActionResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BookingActionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<BookingActionResponse>> CreateBooking([FromBody] CreateBookingRequest request)
     {
+        if (!TryGetUserId(out var userId))
+            return Unauthorized(CreateError("Token utente non valido.", StatusCodes.Status401Unauthorized));
+
+        var idempotencyKey = HttpContext.Request.Headers["X-Idempotency-Key"].FirstOrDefault();
+
         try
         {
-            var result = await bookingService.CreateBookingAsync(request);
-            return CreatedAtAction(nameof(GetUserHistory), new { email = request.UserEmail }, result);
+            var result = await bookingService.CreateBookingAsync(userId, request, idempotencyKey);
+            if (result.IsIdempotentReplay) return Ok(result);
+
+            return CreatedAtAction(nameof(GetUserHistory), null, result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(CreateError(ex.Message, StatusCodes.Status401Unauthorized));
         }
         catch (KeyNotFoundException ex)
         {
@@ -40,16 +56,19 @@ public class BookingsController(IBookingService bookingService) : ControllerBase
     ///     Annulla una prenotazione esistente.
     /// </summary>
     [HttpPut("CancelBooking/{bookingId:int}")]
+    [Authorize]
     [ProducesResponseType(typeof(BookingActionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<BookingActionResponse>> CancelBooking(int bookingId,
-        [FromBody] CancelBookingRequest request)
+    public async Task<ActionResult<BookingActionResponse>> CancelBooking(int bookingId)
     {
+        if (!TryGetUserId(out var userId))
+            return Unauthorized(CreateError("Token utente non valido.", StatusCodes.Status401Unauthorized));
+
         try
         {
-            var result = await bookingService.CancelBookingAsync(bookingId, request);
+            var result = await bookingService.CancelBookingAsync(userId, bookingId);
             return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
@@ -69,14 +88,19 @@ public class BookingsController(IBookingService bookingService) : ControllerBase
     /// <summary>
     ///     Ottiene lo storico prenotazioni di un utente.
     /// </summary>
-    [HttpGet("GetUserHistory/{email}")]
+    [HttpGet("GetUserHistory")]
+    [Authorize]
     [ProducesResponseType(typeof(IReadOnlyCollection<BookingDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<IReadOnlyCollection<BookingDto>>> GetUserHistory(string email)
+    public async Task<ActionResult<IReadOnlyCollection<BookingDto>>> GetUserHistory()
     {
+        if (!TryGetUserId(out var userId))
+            return Unauthorized(CreateError("Token utente non valido.", StatusCodes.Status401Unauthorized));
+
         try
         {
-            var bookings = await bookingService.GetUserHistoryAsync(email);
+            var bookings = await bookingService.GetUserHistoryAsync(userId);
             return Ok(bookings);
         }
         catch (KeyNotFoundException ex)
@@ -89,6 +113,7 @@ public class BookingsController(IBookingService bookingService) : ControllerBase
     ///     Ottiene i posti disponibili per ogni shuttle nella data indicata.
     /// </summary>
     [HttpGet("GetShuttleAvailability")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(IReadOnlyCollection<ShuttleAvailabilityDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyCollection<ShuttleAvailabilityDto>>> GetShuttleAvailability(
         [FromQuery] DateTime? date = null)
@@ -96,6 +121,13 @@ public class BookingsController(IBookingService bookingService) : ControllerBase
         var requestedDate = date?.Date ?? DateTime.UtcNow.Date;
         var availability = await bookingService.GetShuttleAvailabilityAsync(requestedDate);
         return Ok(availability);
+    }
+
+    private bool TryGetUserId(out int userId)
+    {
+        userId = 0;
+        var rawUserId = User.FindFirstValue("userId") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(rawUserId, out userId);
     }
 
     private static ErrorResponse CreateError(string message, int statusCode) =>

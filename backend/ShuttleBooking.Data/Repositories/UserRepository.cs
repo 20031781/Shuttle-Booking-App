@@ -14,6 +14,10 @@ public class UserRepository(AppDbContext context) : IUserRepository
             .FirstOrDefaultAsync(u => u.Email.ToUpper() == normalizedEmail);
     }
 
+    public async Task<User?> GetByRefreshTokenHashAsync(string refreshTokenHash) =>
+        await context.Users
+            .FirstOrDefaultAsync(u => u.RefreshTokenHash == refreshTokenHash);
+
     public async Task<User> CreateAsync(User user)
     {
         user.Email = NormalizeEmail(user.Email).ToLowerInvariant();

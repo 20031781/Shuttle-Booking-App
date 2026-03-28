@@ -19,6 +19,8 @@ public class User
 
     [Required] [MaxLength(20)] public required string AuthProvider { get; set; }
 
+    [MaxLength(256)] public string? PasswordHash { get; set; }
+
     [Required] public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     [MaxLength(255)] public string? ProfilePicture { get; set; }
@@ -30,6 +32,12 @@ public class User
     [MaxLength(255)] public string? Address { get; set; }
 
     [Required] [MaxLength(100)] public required string City { get; set; }
+    [MaxLength(128)] public string? RefreshTokenHash { get; set; }
+    public DateTime? RefreshTokenExpiresAt { get; set; }
+    public DateTime? RefreshTokenRevokedAt { get; set; }
+    [MaxLength(256)] public string? DeviceToken { get; set; }
+    [MaxLength(16)] public string? DevicePlatform { get; set; }
+    public DateTime? DeviceTokenUpdatedAt { get; set; }
 
     public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
 }

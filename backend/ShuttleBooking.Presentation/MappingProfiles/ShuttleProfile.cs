@@ -19,6 +19,7 @@ public class ShuttleProfile : Profile
             .ForMember(destination => destination.AvailableSeats,
                 options => options.MapFrom(source => source.Capacity));
         CreateMap<ShuttleDto, Shuttle>()
-            .ForMember(destination => destination.Bookings, options => options.Ignore());
+            .ForMember(destination => destination.Bookings, options => options.Ignore())
+            .ForMember(destination => destination.RowVersion, options => options.Ignore());
     }
 }

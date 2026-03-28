@@ -17,10 +17,6 @@ public class BookingDto
 
 public class CreateBookingRequest
 {
-    [Required]
-    [EmailAddress]
-    public string UserEmail { get; init; } = string.Empty;
-
     [Range(1, int.MaxValue)]
     public int ShuttleId { get; init; }
 
@@ -28,17 +24,11 @@ public class CreateBookingRequest
     public DateTime Date { get; init; }
 }
 
-public class CancelBookingRequest
-{
-    [Required]
-    [EmailAddress]
-    public string UserEmail { get; init; } = string.Empty;
-}
-
 public class BookingActionResponse
 {
     public required BookingDto Booking { get; init; }
     public int SeatsRemaining { get; init; }
+    public bool IsIdempotentReplay { get; init; }
 }
 
 public class ShuttleAvailabilityDto

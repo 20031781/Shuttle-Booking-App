@@ -5,6 +5,7 @@ namespace ShuttleBooking.Data.Interfaces;
 public interface IUserRepository
 {
     Task<User?> GetByEmailAsync(string email);
+    Task<User?> GetByRefreshTokenHashAsync(string refreshTokenHash);
     Task<User> CreateAsync(User user);
     Task<User?> GetByIdAsync(int id);
     Task<bool> ExistsByEmailAsync(string email);

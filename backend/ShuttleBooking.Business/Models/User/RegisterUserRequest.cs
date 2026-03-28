@@ -12,6 +12,8 @@ public class RegisterUserRequest
 
     [Required] public required string AuthProvider { get; init; }
 
+    [MinLength(8)] public string? Password { get; init; }
+
     public string? ProfilePicture { get; set; }
 
     public string? Phone { get; set; }

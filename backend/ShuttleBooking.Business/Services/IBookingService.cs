@@ -4,8 +4,8 @@ namespace ShuttleBooking.Business.Services;
 
 public interface IBookingService
 {
-    Task<BookingActionResponse> CreateBookingAsync(CreateBookingRequest request);
-    Task<BookingActionResponse> CancelBookingAsync(int bookingId, CancelBookingRequest request);
-    Task<IReadOnlyCollection<BookingDto>> GetUserHistoryAsync(string email);
+    Task<BookingActionResponse> CreateBookingAsync(int userId, CreateBookingRequest request, string? idempotencyKey);
+    Task<BookingActionResponse> CancelBookingAsync(int userId, int bookingId);
+    Task<IReadOnlyCollection<BookingDto>> GetUserHistoryAsync(int userId);
     Task<IReadOnlyCollection<ShuttleAvailabilityDto>> GetShuttleAvailabilityAsync(DateTime date);
 }

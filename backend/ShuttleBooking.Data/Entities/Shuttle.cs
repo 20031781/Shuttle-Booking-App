@@ -13,5 +13,8 @@ public class Shuttle
     [Range(1, 100)]
     public int Capacity { get; set; }
 
+    [Timestamp]
+    public byte[] RowVersion { get; set; } = [];
+
     public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
 }

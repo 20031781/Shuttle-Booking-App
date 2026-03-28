@@ -1,94 +1,130 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type {ComponentProps} from 'react';
+import {Ionicons} from '@expo/vector-icons';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
-import { t } from '../../i18n';
-import { colors } from '../../theme/colors';
-import { BookingHistoryScreen } from '../bookings/BookingHistoryScreen';
-import { ProfileScreen } from '../profile/ProfileScreen';
-import { ShuttleListScreen } from '../shuttles/ShuttleListScreen';
+import {t} from '../../i18n';
+import type {AppThemeColors} from '../../theme/colors';
+import {useAppTheme} from '../../theme/theme';
+import {AdminOpsScreen} from '../admin/AdminOpsScreen';
+import {BookingHistoryScreen} from '../bookings/BookingHistoryScreen';
+import {ProfileScreen} from '../profile/ProfileScreen';
+import {ShuttleListScreen} from '../shuttles/ShuttleListScreen';
 
-export type AppSection = 'shuttle' | 'bookings' | 'profile';
+export type AppSection = 'shuttle' | 'bookings' | 'admin' | 'profile';
 
 type AppNavigatorProps = {
-  section: AppSection;
-  onSectionChange: (section: AppSection) => void;
+    section: AppSection;
+    onSectionChange: (section: AppSection) => void;
 };
 
-function TabButton({
-  label,
-  active,
-  onPress
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable style={[styles.tab, active && styles.tabActive]} onPress={onPress}>
-      <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
-    </Pressable>
-  );
+type TabItem = {
+    section: AppSection;
+    label: string;
+    iconName: ComponentProps<typeof Ionicons>['name'];
+    activeIconName: ComponentProps<typeof Ionicons>['name'];
+};
+
+export function AppNavigator({section, onSectionChange}: AppNavigatorProps) {
+    const {colors} = useAppTheme();
+    const styles = createStyles(colors);
+    const insets = useSafeAreaInsets();
+
+    const tabs: TabItem[] = [
+        {
+            section: 'shuttle',
+            label: t.app.sections.shuttle,
+            iconName: 'car-sport-outline',
+            activeIconName: 'car-sport'
+        },
+        {
+            section: 'bookings',
+            label: t.app.sections.bookings,
+            iconName: 'calendar-clear-outline',
+            activeIconName: 'calendar-clear'
+        },
+        {
+            section: 'admin',
+            label: t.app.sections.admin,
+            iconName: 'analytics-outline',
+            activeIconName: 'analytics'
+        },
+        {
+            section: 'profile',
+            label: t.app.sections.profile,
+            iconName: 'person-outline',
+            activeIconName: 'person'
+        }
+    ];
+
+    function renderTabButton(tab: TabItem) {
+        const active = section === tab.section;
+
+        return <Pressable
+            key={tab.section}
+            style={[styles.tab, active && styles.tabActive]}
+            onPress={() => onSectionChange(tab.section)}>
+            <Ionicons
+                name={active ? tab.activeIconName : tab.iconName}
+                size={20}
+                color={active ? colors.tabIconActive : colors.tabIconInactive}
+            />
+            <Text style={[styles.tabText, active && styles.tabTextActive]}>{tab.label}</Text>
+        </Pressable>;
+    }
+
+    return <View style={styles.wrapper}>
+        <View style={styles.content}>
+            {section === 'shuttle' ? <ShuttleListScreen/> : section === 'bookings' ?
+                <BookingHistoryScreen/> : section === 'admin' ? <AdminOpsScreen/> : <ProfileScreen/>}
+        </View>
+        <View style={[styles.tabHost, {paddingBottom: Math.max(insets.bottom, 12)}]}>
+            <View style={styles.tabs}>{tabs.map(renderTabButton)}</View>
+        </View>
+    </View>;
 }
 
-export function AppNavigator({ section, onSectionChange }: AppNavigatorProps) {
-  return (
-    <View style={styles.wrapper}>
-      <View style={styles.content}>
-        {section === 'shuttle' ? (
-          <ShuttleListScreen />
-        ) : section === 'bookings' ? (
-          <BookingHistoryScreen />
-        ) : (
-          <ProfileScreen />
-        )}
-      </View>
-      <View style={styles.tabs}>
-        <TabButton
-          label={t.app.sections.shuttle}
-          active={section === 'shuttle'}
-          onPress={() => onSectionChange('shuttle')}
-        />
-        <TabButton
-          label={t.app.sections.bookings}
-          active={section === 'bookings'}
-          onPress={() => onSectionChange('bookings')}
-        />
-        <TabButton
-          label={t.app.sections.profile}
-          active={section === 'profile'}
-          onPress={() => onSectionChange('profile')}
-        />
-      </View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  wrapper: {
-    flex: 1,
-    backgroundColor: colors.background
-  },
-  content: {
-    flex: 1
-  },
-  tabs: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center'
-  },
-  tabActive: {
-    backgroundColor: '#eef0ff'
-  },
-  tabText: {
-    color: colors.subtleText,
-    fontWeight: '600'
-  },
-  tabTextActive: {
-    color: colors.primary
-  }
-});
+const createStyles = (colors: AppThemeColors) =>
+    StyleSheet.create({
+        wrapper: {
+            flex: 1,
+            backgroundColor: colors.background
+        },
+        content: {
+            flex: 1,
+            paddingBottom: 6
+        },
+        tabHost: {
+            backgroundColor: colors.background,
+            paddingHorizontal: 16,
+            paddingTop: 6
+        },
+        tabs: {
+            flexDirection: 'row',
+            gap: 6,
+            borderWidth: 1,
+            borderColor: colors.tabBarBorder,
+            backgroundColor: colors.tabBarBackground,
+            borderRadius: 22,
+            padding: 6
+        },
+        tab: {
+            flex: 1,
+            minHeight: 58,
+            borderRadius: 16,
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2
+        },
+        tabActive: {
+            backgroundColor: colors.primarySoft
+        },
+        tabText: {
+            color: colors.tabIconInactive,
+            fontSize: 12,
+            fontWeight: '600'
+        },
+        tabTextActive: {
+            color: colors.tabIconActive
+        }
+    });

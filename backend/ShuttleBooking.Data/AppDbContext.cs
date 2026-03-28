@@ -30,8 +30,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasDefaultValueSql("GETUTCDATE()");
 
         modelBuilder.Entity<Booking>()
+            .Property(b => b.RowVersion)
+            .IsRowVersion();
+
+        modelBuilder.Entity<Shuttle>()
+            .Property(s => s.RowVersion)
+            .IsRowVersion();
+
+        modelBuilder.Entity<Booking>()
             .HasIndex(b => new { b.UserId, b.ShuttleId, b.Date })
             .HasFilter("[IsCanceled] = 0")
             .IsUnique();
+
+        modelBuilder.Entity<Booking>()
+            .HasIndex(b => new { b.UserId, b.IdempotencyKey })
+            .HasFilter("[IdempotencyKey] IS NOT NULL")
+            .IsUnique();
+
+        modelBuilder.Entity<Booking>()
+            .HasIndex(b => new { b.ShuttleId, b.Date, b.IsCanceled });
     }
 }

@@ -6,9 +6,11 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ShuttleBooking.Business.DTOs;
+using ShuttleBooking.Business.Services;
 using ShuttleBooking.Data;
 
 namespace ShuttleBooking.Tests;
@@ -18,14 +20,30 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
     private readonly string _databaseName = $"ShuttleBookingTests_{Guid.NewGuid()}";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
-        builder.ConfigureServices(services =>
-        {
-            services.RemoveAll<DbContextOptions<AppDbContext>>();
-            services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
-            services.RemoveAll<AppDbContext>();
+        builder
+            .ConfigureAppConfiguration((_, configBuilder) =>
+            {
+                configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["RateLimiting:MaxRequestsPerMinute"] = "1000000",
+                    ["AdminDashboard:AllowedEmails:0"] = "admin@test.it"
+                });
+            })
+            .ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.RemoveAll<AppDbContext>();
+                services.RemoveAll<IGoogleAuthService>();
 
-            services.AddDbContext<AppDbContext>(options => { options.UseInMemoryDatabase(_databaseName); });
-        });
+                services.AddDbContext<AppDbContext>(options => { options.UseInMemoryDatabase(_databaseName); });
+                services.AddSingleton<IGoogleAuthService, TestGoogleAuthService>();
+            });
+}
+
+public sealed class TestGoogleAuthService : IGoogleAuthService
+{
+    public Task<bool> ValidateTokenAsync(string token, string email) => Task.FromResult(true);
 }
 
 public class ProgramTest : IClassFixture<CustomWebApplicationFactory>

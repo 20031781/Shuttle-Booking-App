@@ -17,19 +17,34 @@ public class UserService(
         return user == null ? null : MapToDto(user);
     }
 
+    public async Task<UserDto?> GetUserByIdAsync(int userId)
+    {
+        var user = await userRepository.GetByIdAsync(userId);
+        return user == null ? null : MapToDto(user);
+    }
+
     public async Task<UserDto> RegisterUserAsync(RegisterUserRequest request)
     {
         var normalizedEmail = NormalizeEmail(request.Email);
+        var normalizedAuthProvider = request.AuthProvider.Trim();
+        var normalizedPassword = request.Password?.Trim();
 
         if (await userRepository.ExistsByEmailAsync(normalizedEmail))
             throw new InvalidOperationException($"Un utente con l'email {normalizedEmail} esiste già");
+
+        if (string.Equals(normalizedAuthProvider, "App", StringComparison.OrdinalIgnoreCase) &&
+            string.IsNullOrWhiteSpace(normalizedPassword))
+            throw new ArgumentException("Password obbligatoria per utenti con AuthProvider 'App'.");
 
         var user = new User
         {
             Email = normalizedEmail,
             FirstName = request.FirstName.Trim(),
             LastName = request.LastName.Trim(),
-            AuthProvider = request.AuthProvider.Trim(),
+            AuthProvider = normalizedAuthProvider,
+            PasswordHash = string.IsNullOrWhiteSpace(normalizedPassword)
+                ? null
+                : PasswordHashing.HashPassword(normalizedPassword),
             ProfilePicture = request.ProfilePicture,
             Phone = request.Phone,
             PhoneCountryCode = request.PhoneCountryCode.Trim(),
@@ -42,47 +57,101 @@ public class UserService(
         return MapToDto(createdUser);
     }
 
+    public async Task<LoginResponse> LoginAsync(PasswordLoginRequest request)
+    {
+        var normalizedEmail = NormalizeEmail(request.Email);
+        var user = await userRepository.GetByEmailAsync(normalizedEmail)
+                   ?? throw new UnauthorizedAccessException("Credenziali non valide.");
+
+        if (string.IsNullOrWhiteSpace(user.PasswordHash) ||
+            !PasswordHashing.VerifyPassword(request.Password, user.PasswordHash))
+            throw new UnauthorizedAccessException("Credenziali non valide.");
+
+        return await IssueTokensAsync(user);
+    }
+
     public async Task<LoginResponse> LoginWithGoogleAsync(GoogleLoginRequest request)
     {
         var normalizedEmail = NormalizeEmail(request.Email);
 
-        // Valida il token di Google
         var isValidToken = await googleAuthService.ValidateTokenAsync(request.GoogleToken, normalizedEmail);
-
         if (!isValidToken)
             throw new UnauthorizedAccessException("Token Google non valido o non corrispondente all'email fornita");
 
-        // Controlla se l'utente esiste
         var user = await userRepository.GetByEmailAsync(normalizedEmail);
-
-        // Se l'utente non esiste, crea un nuovo utente
         if (user == null)
         {
-            // In un caso reale, qui otterremmo più informazioni dal token di Google
-            // Per semplicità, creiamo un utente con informazioni minime
             user = new User
             {
                 Email = normalizedEmail,
-                FirstName = "Utente", // In pratica queste informazioni sarebbero ottenute dal profilo Google
-                LastName = "Google", // In pratica queste informazioni sarebbero ottenute dal profilo Google
+                FirstName = "Utente",
+                LastName = "Google",
                 AuthProvider = "Google",
-                PhoneCountryCode = "+39", // Valore predefinito
-                City = "Sconosciuta", // Valore predefinito
+                PhoneCountryCode = "+39",
+                City = "Sconosciuta",
                 CreatedAt = DateTime.UtcNow
             };
 
             user = await userRepository.CreateAsync(user);
         }
 
-        // Genera il token JWT
-        var expiration = jwtService.GetTokenExpiration();
-        var token = jwtService.GenerateToken(user, expiration);
+        return await IssueTokensAsync(user);
+    }
+
+    public async Task<LoginResponse> RefreshTokenAsync(RefreshTokenRequest request)
+    {
+        var refreshTokenHash = jwtService.HashRefreshToken(request.RefreshToken);
+        var user = await userRepository.GetByRefreshTokenHashAsync(refreshTokenHash)
+                   ?? throw new UnauthorizedAccessException("Refresh token non valido.");
+
+        if (user.RefreshTokenRevokedAt.HasValue) throw new UnauthorizedAccessException("Refresh token revocato.");
+
+        if (!user.RefreshTokenExpiresAt.HasValue || user.RefreshTokenExpiresAt.Value <= DateTime.UtcNow)
+            throw new UnauthorizedAccessException("Refresh token scaduto.");
+
+        return await IssueTokensAsync(user);
+    }
+
+    public async Task RegisterDeviceTokenAsync(int userId, DeviceTokenRequest request)
+    {
+        var user = await userRepository.GetByIdAsync(userId)
+                   ?? throw new KeyNotFoundException($"Utente con ID {userId} non trovato.");
+
+        user.DeviceToken = request.Token.Trim();
+        user.DevicePlatform = request.Platform.Trim().ToLowerInvariant();
+        user.DeviceTokenUpdatedAt = DateTime.UtcNow;
+        await userRepository.UpdateAsync(user);
+    }
+
+    public async Task LogoutAsync(int userId)
+    {
+        var user = await userRepository.GetByIdAsync(userId)
+                   ?? throw new KeyNotFoundException($"Utente con ID {userId} non trovato.");
+
+        user.RefreshTokenRevokedAt = DateTime.UtcNow;
+        user.RefreshTokenHash = null;
+        user.RefreshTokenExpiresAt = null;
+        await userRepository.UpdateAsync(user);
+    }
+
+    private async Task<LoginResponse> IssueTokensAsync(User user)
+    {
+        var accessTokenExpiration = jwtService.GetTokenExpiration();
+        var refreshTokenExpiration = jwtService.GetRefreshTokenExpiration();
+        var refreshToken = jwtService.GenerateRefreshToken();
+
+        user.RefreshTokenHash = jwtService.HashRefreshToken(refreshToken);
+        user.RefreshTokenExpiresAt = refreshTokenExpiration;
+        user.RefreshTokenRevokedAt = null;
+        await userRepository.UpdateAsync(user);
 
         return new LoginResponse
         {
             User = MapToDto(user),
-            Token = token,
-            Expiration = expiration
+            Token = jwtService.GenerateToken(user, accessTokenExpiration),
+            Expiration = accessTokenExpiration,
+            RefreshToken = refreshToken,
+            RefreshTokenExpiration = refreshTokenExpiration
         };
     }
 

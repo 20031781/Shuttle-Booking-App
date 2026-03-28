@@ -5,11 +5,22 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
+    "notification": {
+      "color": "#3c43ff"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
     "android": {
-      "package": "com.loreappe.shuttlebookingmobile"
-    }
+      "package": "com.loreappe.shuttlebookingmobile",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.NOTIFICATIONS"
+      ]
+    },
+    "plugins": [
+      "expo-notifications",
+      "expo-web-browser"
+    ]
   }
 }
