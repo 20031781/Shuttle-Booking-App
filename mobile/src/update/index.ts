@@ -4,3 +4,5 @@ export {default as updateChecker} from './UpdateChecker';
 export type {UpdateCheckResult} from './UpdateChecker';
 export {useUpdateCheck} from './useUpdateCheck';
 export {UpdateUi} from './UpdateUi';
+export {buildUpdatePreviewResult, resolveDisplayedUpdateResult} from './UpdateDisplayResolver';
+export type {UpdatePreviewMode} from './UpdateDisplayResolver';

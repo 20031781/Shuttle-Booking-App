@@ -1,4 +1,4 @@
-export type AppThemeMode = 'light' | 'dark';
+export type AppThemeMode = 'light' | 'dark' | 'aurora';
 
 export type AppThemeColors = {
     background: string;
@@ -14,6 +14,7 @@ export type AppThemeColors = {
     mutedText: string;
     success: string;
     warning: string;
+    warningBackground: string;
     danger: string;
     border: string;
     borderStrong: string;
@@ -43,6 +44,7 @@ export const lightColors: AppThemeColors = {
     mutedText: '#8993a9',
     success: '#2e9b62',
     warning: '#c27a00',
+    warningBackground: '#fdf3e0',
     danger: '#c64545',
     border: '#e1e6f2',
     borderStrong: '#cfd7e8',
@@ -68,6 +70,7 @@ export const darkColors: AppThemeColors = {
     mutedText: '#7d89a5',
     success: '#58d49a',
     warning: '#f0bb5f',
+    warningBackground: 'rgba(240, 187, 95, 0.16)',
     danger: '#f08f8f',
     border: '#2a3754',
     borderStrong: '#3b4b6d',
@@ -77,4 +80,30 @@ export const darkColors: AppThemeColors = {
     tabIconInactive: '#7f8ba8',
     skeletonBase: '#2b3550',
     skeletonHighlight: 'rgba(255,255,255,0.24)'
+};
+
+export const auroraGlassColors: AppThemeColors = {
+    background: '#050c1a',
+    backgroundAccent: '#071328',
+    surface: 'rgba(10, 29, 50, 0.72)',
+    surfaceElevated: 'rgba(10, 29, 50, 0.82)',
+    surfaceSecondary: 'rgba(22, 48, 76, 0.58)',
+    primary: '#00c97a',
+    primarySoft: 'rgba(0, 201, 122, 0.16)',
+    onPrimary: '#032217',
+    text: '#ecf7ff',
+    subtleText: '#9bb3ca',
+    mutedText: '#68839e',
+    success: '#00d18a',
+    warning: '#f0bb5f',
+    warningBackground: 'rgba(240, 187, 95, 0.14)',
+    danger: '#ff8787',
+    border: 'rgba(125, 170, 210, 0.24)',
+    borderStrong: 'rgba(125, 170, 210, 0.4)',
+    tabBarBackground: 'rgba(11, 28, 48, 0.86)',
+    tabBarBorder: 'rgba(125, 170, 210, 0.28)',
+    tabIconActive: '#00d18a',
+    tabIconInactive: '#7d95af',
+    skeletonBase: '#18324d',
+    skeletonHighlight: 'rgba(232,244,255,0.18)'
 };

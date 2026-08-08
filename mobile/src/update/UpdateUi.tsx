@@ -1,9 +1,9 @@
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 
-import {t} from '../i18n';
-import type {AppThemeColors} from '../theme/colors';
-import {useAppTheme} from '../theme/theme';
-import {UpdateCheckResult} from './UpdateChecker';
+import {t} from '@/i18n';
+import type {AppThemeColors} from '@/theme/colors';
+import {useAppTheme} from '@/theme/theme';
+import type {UpdateCheckResult} from './UpdateChecker';
 
 type UpdateUiProps = {
     updateResult: UpdateCheckResult | null;

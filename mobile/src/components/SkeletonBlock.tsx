@@ -1,19 +1,28 @@
 import {useEffect, useRef} from 'react';
 import {Animated, Easing, type StyleProp, StyleSheet, View, type ViewStyle} from 'react-native';
 
-import type {AppThemeColors} from '../theme/colors';
-import {useAppTheme} from '../theme/theme';
+import type {AppThemeColors} from '@/theme/colors';
+import {useAppTheme} from '@/theme/theme';
 
 export type SkeletonVariant = 'pulse' | 'shimmer';
 
 type SkeletonBlockProps = {
     style?: StyleProp<ViewStyle>;
     variant?: SkeletonVariant;
+    /** Scorciatoie per i casi comuni, così non serve creare uno stile dedicato. */
+    width?: number | `${number}%`;
+    height?: number;
+    radius?: number;
 };
 
-export function SkeletonBlock({style, variant = 'shimmer'}: SkeletonBlockProps) {
+export function SkeletonBlock({style, variant = 'shimmer', width, height, radius}: SkeletonBlockProps) {
     const {colors} = useAppTheme();
     const styles = createStyles(colors);
+    const sizeStyle: ViewStyle = {
+        ...(width === undefined ? {} : {width}),
+        ...(height === undefined ? {} : {height}),
+        ...(radius === undefined ? {} : {borderRadius: radius})
+    };
     const pulse = useRef(new Animated.Value(0.52)).current;
     const shimmer = useRef(new Animated.Value(0)).current;
 
@@ -45,10 +54,10 @@ export function SkeletonBlock({style, variant = 'shimmer'}: SkeletonBlockProps) 
     }, [pulse, shimmer, variant]);
 
     if (variant === 'pulse') {
-        return <Animated.View style={[styles.base, style, {opacity: pulse}]}/>;
+        return <Animated.View style={[styles.base, sizeStyle, style, {opacity: pulse}]}/>;
     }
 
-    return <View style={[styles.base, style]}>
+    return <View style={[styles.base, sizeStyle, style]}>
         <Animated.View
             style={[
                 styles.shimmerBand,

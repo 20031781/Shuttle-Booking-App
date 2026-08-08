@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import {Platform} from 'react-native';
 
-import {UpdateConfig, UpdatePolicy, type UpdateRequirement} from './UpdatePolicy';
+import {type UpdateConfig, UpdatePolicy, type UpdateRequirement} from './UpdatePolicy';
 
 type RawUpdateConfig = {
     latestVersionCode?: unknown;
