@@ -127,6 +127,24 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
+    public async Task CrossOriginRequest_DoesNotReceiveAccessControlAllowOrigin_WhenNoOriginsConfigured()
+    {
+        // Arrange: nessuna Cors:AllowedOrigins configurata nella factory di test, comportamento
+        // di default in produzione finché nessuna origine viene esplicitamente autorizzata.
+        await AuthenticateAsManagerAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Get, RequestBase + "GetShuttles");
+        request.Headers.Authorization = _client.DefaultRequestHeaders.Authorization;
+        request.Headers.Add("Origin", "https://evil.example.com");
+
+        // Act
+        var response = await _client.SendAsync(request);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Headers.Contains("Access-Control-Allow-Origin").Should().BeFalse();
+    }
+
+    [Fact]
     public async Task GetAllShuttles_ReturnsUnauthorized_WithoutToken()
     {
         // Arrange

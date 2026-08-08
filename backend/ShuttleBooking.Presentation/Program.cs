@@ -107,6 +107,19 @@ builder.Services.Configure<AdminDashboardOptions>(builder.Configuration.GetSecti
 builder.Services.Configure<ManagerDashboardOptions>(builder.Configuration.GetSection("ManagerDashboard"));
 builder.Services.Configure<PushNotificationsOptions>(builder.Configuration.GetSection("PushNotifications"));
 
+// L'app mobile nativa non è soggetta a CORS: questa policy esiste solo per eventuali
+// client browser futuri. Nessuna origine in config = nessuna origine ammessa (WithOrigins
+// con array vuoto non fa mai match, quindi il default resta "nega tutto" senza eccezioni.
+var corsAllowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+const string corsPolicyName = "Default";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(corsPolicyName, policy =>
+        policy.WithOrigins(corsAllowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod());
+});
+
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
@@ -144,6 +157,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
+app.UseCors(corsPolicyName);
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
