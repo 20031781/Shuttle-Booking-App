@@ -38,6 +38,9 @@ type ToggleItem = {
     iconName: keyof typeof Ionicons.glyphMap;
 };
 
+// Solo le preferenze che il backend sa effettivamente rispettare sono mostrate:
+// non esiste ancora uno scheduler per promemoria/posti liberi/annunci, quindi
+// mostrare quei toggle darebbe all'utente un controllo che non fa nulla.
 const toggleItems: ToggleItem[] = [
     {
         key: 'bookingConfirmations',
@@ -50,30 +53,6 @@ const toggleItems: ToggleItem[] = [
         title: t.profileSettings.items.bookingCancellationsTitle,
         subtitle: t.profileSettings.items.bookingCancellationsSubtitle,
         iconName: 'close-circle-outline'
-    },
-    {
-        key: 'shuttleReminderOneHour',
-        title: t.profileSettings.items.shuttleReminderOneHourTitle,
-        subtitle: t.profileSettings.items.shuttleReminderOneHourSubtitle,
-        iconName: 'time-outline'
-    },
-    {
-        key: 'shuttleReminderDayBefore',
-        title: t.profileSettings.items.shuttleReminderDayBeforeTitle,
-        subtitle: t.profileSettings.items.shuttleReminderDayBeforeSubtitle,
-        iconName: 'calendar-outline'
-    },
-    {
-        key: 'seatAvailabilityAlerts',
-        title: t.profileSettings.items.seatAvailabilityAlertsTitle,
-        subtitle: t.profileSettings.items.seatAvailabilityAlertsSubtitle,
-        iconName: 'notifications-outline'
-    },
-    {
-        key: 'systemAnnouncements',
-        title: t.profileSettings.items.systemAnnouncementsTitle,
-        subtitle: t.profileSettings.items.systemAnnouncementsSubtitle,
-        iconName: 'megaphone-outline'
     }
 ];
 
