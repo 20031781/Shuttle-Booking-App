@@ -32,12 +32,17 @@ public class User
     [MaxLength(255)] public string? Address { get; set; }
 
     [Required] [MaxLength(100)] public required string City { get; set; }
+    [MaxLength(50)] public string? Username { get; set; }
+    [MaxLength(100)] public string? Club { get; set; }
+    public bool IsProfileCompleted { get; set; }
     [MaxLength(128)] public string? RefreshTokenHash { get; set; }
     public DateTime? RefreshTokenExpiresAt { get; set; }
     public DateTime? RefreshTokenRevokedAt { get; set; }
     [MaxLength(256)] public string? DeviceToken { get; set; }
     [MaxLength(16)] public string? DevicePlatform { get; set; }
     public DateTime? DeviceTokenUpdatedAt { get; set; }
+    public bool NotifyOnBookingConfirmation { get; set; } = true;
+    public bool NotifyOnBookingCancellation { get; set; } = true;
 
     public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
 }

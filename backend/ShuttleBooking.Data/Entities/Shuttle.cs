@@ -13,6 +13,9 @@ public class Shuttle
     [Range(1, 100)]
     public int Capacity { get; set; }
 
+    [Required]
+    public DateTime MeetingAtUtc { get; set; }
+
     [Timestamp]
     public byte[] RowVersion { get; set; } = [];
 

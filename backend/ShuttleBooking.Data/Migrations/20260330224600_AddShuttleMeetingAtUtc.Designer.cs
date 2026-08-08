@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ShuttleBooking.Data;
 
@@ -11,9 +12,11 @@ using ShuttleBooking.Data;
 namespace ShuttleBooking.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260330224600_AddShuttleMeetingAtUtc")]
+    partial class AddShuttleMeetingAtUtc
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -162,12 +165,6 @@ namespace ShuttleBooking.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
-
-                    b.Property<bool>("NotifyOnBookingCancellation")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("NotifyOnBookingConfirmation")
-                        .HasColumnType("bit");
 
                     b.Property<string>("PasswordHash")
                         .HasMaxLength(256)

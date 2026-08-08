@@ -49,5 +49,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<Booking>()
             .HasIndex(b => new { b.ShuttleId, b.Date, b.IsCanceled });
+
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Username)
+            .IsUnique()
+            .HasFilter("[Username] IS NOT NULL");
     }
 }
