@@ -12,7 +12,8 @@
       "**/*"
     ],
     "android": {
-      "package": "com.loreappe.shuttlebookingmobile",
+      "package": "com.shuttlebooking.com",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 1,
       "permissions": [
         "android.permission.NOTIFICATIONS"
@@ -20,7 +21,10 @@
     },
     "plugins": [
       "expo-notifications",
-      "expo-web-browser"
-    ]
+      "expo-web-browser",
+      "expo-secure-store",
+      "@react-native-community/datetimepicker"
+    ],
+    "scheme": "shuttlebooking"
   }
 }

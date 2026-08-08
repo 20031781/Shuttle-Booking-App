@@ -1,7 +1,12 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
-  "include": ["App.tsx", "src"]
+  "include": ["index.ts", "App.tsx", "src", "vitest.setup.ts", "vitest.config.ts"]
 }
