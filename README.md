@@ -64,6 +64,55 @@ Se usi un device fisico:
 - backend in ascolto su `0.0.0.0:5000` (profilo `http` in `launchSettings.json`)
 - apri la porta `5000` nel firewall locale se necessario
 
+## Script utili
+
+### Sviluppo rapido
+
+- `npm start` → Expo Go / dev build con QR e hot reload (premere `s` per Expo Go).
+
+### Sviluppo nativo (device reali)
+
+- ```bash
+  npx expo run:android
+  ```
+- `npm run ios` → build nativa iOS locale (Xcode).
+
+> ⚠️ Richiede Android SDK / Xcode locali.
+
+### Controllo qualità e test
+
+Da qui esegui:
+
+```bash
+Set-Location ..\mobile; npm run lint; npm run type-check; npm test
+```
+
+```bash
+Set-Location ..\mobile; npx expo-doctor; npx expo install --fix; npm outdated
+```
+
+### Aggiornamento dipendenze
+
+```bash
+npm update
+```
+
+### Build EAS (Android)
+
+AAB per Play Store (profilo `production`):
+
+> Committare i file prima di eseguire il comando perché EAS builda dal codice remoto (Git) non dal working tree locale.
+
+```bash
+npm run aab
+```
+
+Lista build recenti e relativo stato:
+
+```bash
+npx eas-cli build:list --platform android --limit 5
+```
+
 ## Migrazioni e database
 
 Le migrazioni EF Core sono in `backend/ShuttleBooking.Data/Migrations`.
