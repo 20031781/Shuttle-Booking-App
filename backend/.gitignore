@@ -42,6 +42,7 @@
 # ASP.NET Core
 appsettings*.json
 appsettings.*.json
+!appsettings.example.json
 
 # User secrets
 secrets.json

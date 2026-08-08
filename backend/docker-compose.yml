@@ -7,7 +7,7 @@ services:
     pull_policy: always
     restart: unless-stopped
     environment:
-      - SA_PASSWORD=YourPassword123
+      - SA_PASSWORD=${DB_SA_PASSWORD:?Set DB_SA_PASSWORD in backend/.env (see backend/.env.example)}
       - ACCEPT_EULA=Y
     volumes:
       - dbdata:/var/opt/mssql

@@ -21,13 +21,13 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
-        run: dotnet restore backend/ShuttleBookingApi.sln
+        run: dotnet restore backend/ShuttleBooking.sln
 
       - name: Build
-        run: dotnet build backend/ShuttleBookingApi.sln --configuration Release --no-restore
+        run: dotnet build backend/ShuttleBooking.sln --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test backend/ShuttleBookingApi.sln --configuration Release --no-build
+        run: dotnet test backend/ShuttleBooking.sln --configuration Release --no-build
 
   mobile-quality:
     name: Mobile Lint & Typecheck
@@ -54,6 +54,9 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Test
+        run: npm test
 
   build-artifacts:
     name: Build Artifacts

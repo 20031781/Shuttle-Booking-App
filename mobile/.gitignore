@@ -5,6 +5,8 @@ dist/
 web-build/
 android/
 ios/
+.env
+.env.*
 .idea/
 .vs/
 *.DotSettings.user

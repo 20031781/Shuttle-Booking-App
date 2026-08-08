@@ -7,7 +7,7 @@ services:
     pull_policy: always
     restart: unless-stopped
     environment:
-      - SA_PASSWORD=YourPassword123
+      - SA_PASSWORD=${DB_SA_PASSWORD:?Set DB_SA_PASSWORD in the deploy environment (see backend/.env.example)}
       - ACCEPT_EULA=Y
     volumes:
       - db_data:/var/opt/mssql
@@ -26,8 +26,8 @@ services:
       - db
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Server=db,1433;Database=ShuttleBookingDb;User Id=sa;Password=YourPassword123;TrustServerCertificate=True
-      - Jwt__Key=${JWT_SECRET_KEY:-superSecretKey123456789012345678901234567890}
+      - ConnectionStrings__DefaultConnection=Server=db,1433;Database=ShuttleBookingDb;User Id=sa;Password=${DB_SA_PASSWORD:?Set DB_SA_PASSWORD in the deploy environment (see backend/.env.example)};TrustServerCertificate=True
+      - Jwt__Key=${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in the deploy environment (see backend/.env.example)}
       - Jwt__Issuer=ShuttleBookingApi
       - Jwt__Audience=ShuttleBookingApp
       - Jwt__ExpiryInDays=1
@@ -60,8 +60,7 @@ services:
       - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
 
       # Let's Encrypt (DNS-01 Cloudflare)
-      # IMPORTANTE: Sostituisci con la tua email reale se non l'hai fatto nel file .env o qui
-      - "--certificatesresolvers.le.acme.email=TUO_EMAIL@DOMINIO.IT"
+      - "--certificatesresolvers.le.acme.email=${LETSENCRYPT_EMAIL:?Set LETSENCRYPT_EMAIL in the deploy environment (see backend/.env.example)}"
       - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
       - "--certificatesresolvers.le.acme.dnschallenge=true"
       - "--certificatesresolvers.le.acme.dnschallenge.provider=cloudflare"
