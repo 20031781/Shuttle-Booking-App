@@ -20,6 +20,15 @@ const skeletonCards = Array.from({length: 3}, (_, index) => `skeleton-${index}`)
 const realtimeRefreshIntervalMs = 15_000;
 const lowAvailabilityThreshold = 3;
 
+function toDateKey(isoDate: string): string {
+    const parsed = new Date(isoDate);
+    return Number.isNaN(parsed.getTime()) ? isoDate : parsed.toISOString().slice(0, 10);
+}
+
+function bookingKey(shuttleId: string, isoDate: string): string {
+    return `${shuttleId}::${toDateKey(isoDate)}`;
+}
+
 function ShuttleListSkeleton() {
     const {colors} = useAppTheme();
     const styles = createStyles(colors);
@@ -69,7 +78,7 @@ export function ShuttleListScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [bookingInProgressId, setBookingInProgressId] = useState<string | null>(null);
-    const [bookedShuttleIds, setBookedShuttleIds] = useState<Set<string>>(new Set());
+    const [bookedKeys, setBookedKeys] = useState<Set<string>>(new Set());
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
 
@@ -78,13 +87,13 @@ export function ShuttleListScreen() {
 
         try {
             const [shuttles, bookings] = await Promise.all([shuttleRepository.list(), bookingRepository.list()]);
-            const activeBookingsToday = new Set(
+            const activeBookingKeys = new Set(
                 bookings
                     .filter(booking => booking.status === 'active')
-                    .map(booking => booking.shuttleId)
+                    .map(booking => bookingKey(booking.shuttleId, booking.date))
             );
             setItems(shuttles);
-            setBookedShuttleIds(activeBookingsToday);
+            setBookedKeys(activeBookingKeys);
         } catch (requestError) {
             setError(getFriendlyErrorMessage(requestError, t.shuttles.loadErrorMessage));
         } finally {
@@ -103,9 +112,9 @@ export function ShuttleListScreen() {
             const bookingDate = Number.isNaN(parsedMeetingDate.getTime()) ? new Date() : parsedMeetingDate;
             const booking = await bookingRepository.create(shuttle.id, bookingDate);
             setNotice(t.shuttles.bookingConfirmed(shuttle.routeName, booking.seatsRemaining ?? shuttle.seatsAvailable));
-            setBookedShuttleIds(previous => {
+            setBookedKeys(previous => {
                 const next = new Set(previous);
-                next.add(shuttle.id);
+                next.add(bookingKey(shuttle.id, bookingDate.toISOString()));
                 return next;
             });
             await loadShuttles();
@@ -161,7 +170,7 @@ export function ShuttleListScreen() {
             data={items}
             renderItem={({item}) => <ShuttleCard
                 shuttle={item}
-                hasActiveBooking={bookedShuttleIds.has(item.id)}
+                hasActiveBooking={bookedKeys.has(bookingKey(item.id, item.meetingAtUtc))}
                 bookingInProgress={bookingInProgressId === item.id}
                 onBook={handleBook}
             />}
