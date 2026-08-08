@@ -4,7 +4,7 @@ namespace ShuttleBooking.Business.Services;
 
 public interface IJwtService
 {
-    string GenerateToken(User user, DateTime expiresAtUtc);
+    string GenerateToken(User user, IEnumerable<string> roles, DateTime expiresAtUtc);
     string GenerateRefreshToken();
     DateTime GetTokenExpiration();
     DateTime GetRefreshTokenExpiration();

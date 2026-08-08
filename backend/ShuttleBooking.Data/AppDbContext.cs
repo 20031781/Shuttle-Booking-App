@@ -8,6 +8,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Shuttle> Shuttles { get; set; } = null!;
     public DbSet<Booking> Bookings { get; set; } = null!;
     public DbSet<User> Users { get; set; } = null!;
+    public DbSet<UserRole> UserRoles { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -54,5 +55,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasIndex(u => u.Username)
             .IsUnique()
             .HasFilter("[Username] IS NOT NULL");
+
+        modelBuilder.Entity<UserRole>()
+            .HasOne(ur => ur.User)
+            .WithMany(u => u.Roles)
+            .HasForeignKey(ur => ur.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserRole>()
+            .HasIndex(ur => new { ur.UserId, ur.Role })
+            .IsUnique();
     }
 }

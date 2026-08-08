@@ -45,4 +45,5 @@ public class User
     public bool NotifyOnBookingCancellation { get; set; } = true;
 
     public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
+    public ICollection<UserRole> Roles { get; set; } = new List<UserRole>();
 }

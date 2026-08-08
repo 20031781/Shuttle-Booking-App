@@ -1,9 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 using ShuttleBooking.Business.Models;
-using ShuttleBooking.Business.Models.Admin;
+using ShuttleBooking.Business.Models.Auth;
 using ShuttleBooking.Business.Models.Push;
 using ShuttleBooking.Business.Models.User;
 using ShuttleBooking.Business.Services;
@@ -17,12 +16,8 @@ namespace ShuttleBooking.Presentation.Controller;
 [Route("[controller]")]
 public class UserController(
     IUserService userService,
-    IPushNotificationService pushNotificationService,
-    IOptions<AdminDashboardOptions> adminOptionsAccessor,
-    IOptions<ManagerDashboardOptions> managerOptionsAccessor) : ControllerBase
+    IPushNotificationService pushNotificationService) : ControllerBase
 {
-    private readonly AdminDashboardOptions _adminOptions = adminOptionsAccessor.Value;
-    private readonly ManagerDashboardOptions _managerOptions = managerOptionsAccessor.Value;
 
     /// <summary>
     ///     Registra un nuovo utente.
@@ -419,21 +414,12 @@ public class UserController(
     [Authorize]
     [ProducesResponseType(typeof(UserAccessDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    public ActionResult<UserAccessDto> GetAccess()
-    {
-        if (!TryGetUserEmail(out var email))
-            return Unauthorized(new ErrorResponse
-            {
-                Message = "Token utente non valido.",
-                StatusCode = StatusCodes.Status401Unauthorized
-            });
-
-        return Ok(new UserAccessDto
+    public ActionResult<UserAccessDto> GetAccess() =>
+        Ok(new UserAccessDto
         {
-            IsAdmin = IsAllowedEmail(email, _adminOptions.AllowedEmails),
-            IsManager = IsAllowedEmail(email, _managerOptions.AllowedEmails)
+            IsAdmin = User.IsInRole(Roles.Admin),
+            IsManager = User.IsInRole(Roles.Manager)
         });
-    }
 
     private bool TryGetUserId(out int userId)
     {
@@ -442,20 +428,4 @@ public class UserController(
         return int.TryParse(rawUserId, out userId);
     }
 
-    private bool TryGetUserEmail(out string email)
-    {
-        email = User.FindFirstValue(ClaimTypes.Email)
-                ?? User.FindFirstValue("email")
-                ?? string.Empty;
-        return !string.IsNullOrWhiteSpace(email);
-    }
-
-    private static bool IsAllowedEmail(string email, IEnumerable<string> allowedEmails)
-    {
-        var allowedList = allowedEmails.ToList();
-        if (allowedList.Count == 0) return false;
-
-        return allowedList.Any(allowedEmail =>
-            string.Equals(allowedEmail, email, StringComparison.OrdinalIgnoreCase));
-    }
 }

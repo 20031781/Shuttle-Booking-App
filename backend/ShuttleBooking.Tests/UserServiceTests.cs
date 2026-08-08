@@ -1,5 +1,7 @@
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Moq;
+using ShuttleBooking.Business.Models.Admin;
 using ShuttleBooking.Business.Models.User;
 using ShuttleBooking.Business.Services;
 using ShuttleBooking.Data.Entities;
@@ -12,6 +14,7 @@ public class UserServiceTests
     private readonly Mock<IGoogleAuthService> _googleAuthServiceMock = new();
     private readonly Mock<IJwtService> _jwtServiceMock = new();
     private readonly Mock<IUserRepository> _userRepositoryMock = new();
+    private readonly Mock<IUserRoleRepository> _userRoleRepositoryMock = new();
 
     [Fact]
     public async Task RegisterUserAsync_SetsProfileIncomplete_WhenMandatoryFieldsAreMissing()
@@ -116,7 +119,7 @@ public class UserServiceTests
             .Returns("refresh-token-register-hash");
 
         _jwtServiceMock
-            .Setup(service => service.GenerateToken(It.IsAny<User>(), It.IsAny<DateTime>()))
+            .Setup(service => service.GenerateToken(It.IsAny<User>(), It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>()))
             .Returns("jwt-token-register");
 
         _userRepositoryMock
@@ -193,7 +196,7 @@ public class UserServiceTests
             .Returns("refresh-token-hash");
 
         _jwtServiceMock
-            .Setup(service => service.GenerateToken(It.IsAny<User>(), It.IsAny<DateTime>()))
+            .Setup(service => service.GenerateToken(It.IsAny<User>(), It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>()))
             .Returns("jwt-token");
 
         var userService = CreateService();
@@ -279,7 +282,7 @@ public class UserServiceTests
             .Returns("refresh-token-login-hash");
 
         _jwtServiceMock
-            .Setup(service => service.GenerateToken(It.IsAny<User>(), It.IsAny<DateTime>()))
+            .Setup(service => service.GenerateToken(It.IsAny<User>(), It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>()))
             .Returns("jwt-token-login");
 
         var userService = CreateService();
@@ -371,6 +374,18 @@ public class UserServiceTests
         user.NotifyOnBookingCancellation.Should().BeTrue();
     }
 
-    private UserService CreateService() =>
-        new(_userRepositoryMock.Object, _jwtServiceMock.Object, _googleAuthServiceMock.Object);
+    private UserService CreateService()
+    {
+        _userRoleRepositoryMock
+            .Setup(repository => repository.GetRolesAsync(It.IsAny<int>()))
+            .ReturnsAsync(Array.Empty<string>());
+
+        return new UserService(
+            _userRepositoryMock.Object,
+            _userRoleRepositoryMock.Object,
+            _jwtServiceMock.Object,
+            _googleAuthServiceMock.Object,
+            Options.Create(new AdminDashboardOptions()),
+            Options.Create(new ManagerDashboardOptions()));
+    }
 }

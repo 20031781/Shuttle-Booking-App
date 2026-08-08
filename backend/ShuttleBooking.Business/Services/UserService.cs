@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Options;
+using ShuttleBooking.Business.Models.Admin;
+using ShuttleBooking.Business.Models.Auth;
 using ShuttleBooking.Business.Models.User;
 using ShuttleBooking.Data.Entities;
 using ShuttleBooking.Data.Interfaces;
@@ -6,10 +9,15 @@ namespace ShuttleBooking.Business.Services;
 
 public class UserService(
     IUserRepository userRepository,
+    IUserRoleRepository userRoleRepository,
     IJwtService jwtService,
-    IGoogleAuthService googleAuthService)
+    IGoogleAuthService googleAuthService,
+    IOptions<AdminDashboardOptions> adminOptionsAccessor,
+    IOptions<ManagerDashboardOptions> managerOptionsAccessor)
     : IUserService
 {
+    private readonly AdminDashboardOptions _adminOptions = adminOptionsAccessor.Value;
+    private readonly ManagerDashboardOptions _managerOptions = managerOptionsAccessor.Value;
     public async Task<UserDto?> GetUserByEmailAsync(string email)
     {
         var normalizedEmail = NormalizeEmail(email);
@@ -224,6 +232,7 @@ public class UserService(
 
     private async Task<LoginResponse> IssueTokensAsync(User user)
     {
+        var roles = await ReconcileBootstrapRolesAsync(user);
         var accessTokenExpiration = jwtService.GetTokenExpiration();
         var refreshTokenExpiration = jwtService.GetRefreshTokenExpiration();
         var refreshToken = jwtService.GenerateRefreshToken();
@@ -236,11 +245,77 @@ public class UserService(
         return new LoginResponse
         {
             User = MapToDto(user),
-            Token = jwtService.GenerateToken(user, accessTokenExpiration),
+            Token = jwtService.GenerateToken(user, roles, accessTokenExpiration),
             Expiration = accessTokenExpiration,
             RefreshToken = refreshToken,
             RefreshTokenExpiration = refreshTokenExpiration
         };
+    }
+
+    /// <summary>
+    ///     Le allowlist email restano solo come bootstrap: se l'email dell'utente compare in
+    ///     AdminDashboard/ManagerDashboard e non ha ancora il ruolo corrispondente, glielo assegna
+    ///     in modo permanente. Da quel momento il ruolo vive nella tabella UserRoles e può essere
+    ///     gestito via /AdminOps/Roles senza toccare la configurazione.
+    /// </summary>
+    private async Task<IReadOnlyCollection<string>> ReconcileBootstrapRolesAsync(User user)
+    {
+        var roles = new HashSet<string>(await userRoleRepository.GetRolesAsync(user.Id), StringComparer.Ordinal);
+
+        if (EmailAllowlist.Contains(user.Email, _adminOptions.AllowedEmails) && roles.Add(Roles.Admin))
+            await userRoleRepository.AddRoleAsync(user.Id, Roles.Admin);
+
+        if (EmailAllowlist.Contains(user.Email, _managerOptions.AllowedEmails) && roles.Add(Roles.Manager))
+            await userRoleRepository.AddRoleAsync(user.Id, Roles.Manager);
+
+        return roles;
+    }
+
+    public async Task<UserRolesDto> AssignRoleAsync(string email, string role)
+    {
+        var normalizedRole = ValidateRole(role);
+        var normalizedEmail = NormalizeEmail(email);
+        var user = await userRepository.GetByEmailAsync(normalizedEmail)
+                   ?? throw new KeyNotFoundException($"Utente con email {normalizedEmail} non trovato.");
+
+        await userRoleRepository.AddRoleAsync(user.Id, normalizedRole);
+        var roles = await userRoleRepository.GetRolesAsync(user.Id);
+        return new UserRolesDto { Email = user.Email, Roles = roles };
+    }
+
+    public async Task<UserRolesDto> RevokeRoleAsync(string email, string role)
+    {
+        var normalizedRole = ValidateRole(role);
+        var normalizedEmail = NormalizeEmail(email);
+        var user = await userRepository.GetByEmailAsync(normalizedEmail)
+                   ?? throw new KeyNotFoundException($"Utente con email {normalizedEmail} non trovato.");
+
+        await userRoleRepository.RemoveRoleAsync(user.Id, normalizedRole);
+        var roles = await userRoleRepository.GetRolesAsync(user.Id);
+        return new UserRolesDto { Email = user.Email, Roles = roles };
+    }
+
+    public async Task<UserRolesDto> GetRolesAsync(string email)
+    {
+        var normalizedEmail = NormalizeEmail(email);
+        var user = await userRepository.GetByEmailAsync(normalizedEmail)
+                   ?? throw new KeyNotFoundException($"Utente con email {normalizedEmail} non trovato.");
+
+        var roles = await userRoleRepository.GetRolesAsync(user.Id);
+        return new UserRolesDto { Email = user.Email, Roles = roles };
+    }
+
+    private static string ValidateRole(string role)
+    {
+        var trimmedRole = role.Trim();
+        var matchedRole = Roles.All.FirstOrDefault(known =>
+            string.Equals(known, trimmedRole, StringComparison.OrdinalIgnoreCase));
+
+        if (matchedRole == null)
+            throw new ArgumentException(
+                $"Ruolo '{role}' non valido. Ruoli disponibili: {string.Join(", ", Roles.All)}.");
+
+        return matchedRole;
     }
 
     private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();

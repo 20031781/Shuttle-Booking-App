@@ -10,22 +10,27 @@ namespace ShuttleBooking.Business.Services;
 
 public class JwtService(IConfiguration configuration) : IJwtService
 {
-    public string GenerateToken(User user, DateTime expiresAtUtc)
+    public string GenerateToken(User user, IEnumerable<string> roles, DateTime expiresAtUtc)
     {
         var issuer = configuration["Jwt:Issuer"];
         var audience = configuration["Jwt:Audience"];
         var key = Encoding.UTF8.GetBytes(configuration["Jwt:Key"] ??
                                          throw new InvalidOperationException("JWT Key not configured"));
 
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Email, user.Email),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Name, $"{user.FirstName} {user.LastName}"),
+            new("userId", user.Id.ToString())
+        };
+        claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
+
         var tokenDescriptor = new SecurityTokenDescriptor
         {
-            Subject = new ClaimsIdentity([
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Name, $"{user.FirstName} {user.LastName}"), new Claim("userId", user.Id.ToString())
-            ]),
+            Subject = new ClaimsIdentity(claims),
             Expires = expiresAtUtc,
             Issuer = issuer,
             Audience = audience,
