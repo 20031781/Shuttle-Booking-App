@@ -9,6 +9,6 @@ public interface IBookingRepository
     Task<IReadOnlyCollection<Booking>> GetByUserIdAsync(int userId);
     Task<bool> HasActiveBookingAsync(int userId, int shuttleId, DateTime date);
     Task<int> GetActiveBookingCountAsync(int shuttleId, DateTime date);
-    Task<Dictionary<int, int>> GetActiveBookingCountsByDateAsync(DateTime date);
+    Task<Dictionary<(int ShuttleId, DateTime Date), int>> GetActiveBookingCountsAsync(IReadOnlyCollection<int> shuttleIds);
     Task SaveChangesAsync();
 }

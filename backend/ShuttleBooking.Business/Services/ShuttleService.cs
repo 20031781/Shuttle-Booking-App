@@ -13,16 +13,15 @@ public class ShuttleService(
     {
         var requestedDate = date?.Date;
         var shuttles = (await shuttleRepository.GetAllShuttlesAsync()).ToList();
-        var result = new List<ShuttleDto>(shuttles.Count);
+        var activeCounts = await bookingRepository.GetActiveBookingCountsAsync(
+            shuttles.Select(s => s.Id).ToList());
 
-        foreach (var shuttle in shuttles)
+        return shuttles.Select(shuttle =>
         {
             var bookingDate = requestedDate ?? shuttle.MeetingAtUtc.Date;
-            var activeCount = await bookingRepository.GetActiveBookingCountAsync(shuttle.Id, bookingDate);
-            result.Add(MapShuttle(shuttle, activeCount));
-        }
-
-        return result;
+            activeCounts.TryGetValue((shuttle.Id, bookingDate), out var activeCount);
+            return MapShuttle(shuttle, activeCount);
+        }).ToList();
     }
 
     public async Task<ShuttleDto?> GetShuttleByIdAsync(int id)

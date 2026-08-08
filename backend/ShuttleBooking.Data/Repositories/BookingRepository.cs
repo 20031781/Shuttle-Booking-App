@@ -51,16 +51,19 @@ public class BookingRepository(AppDbContext context) : IBookingRepository
             b.Date < end);
     }
 
-    public async Task<Dictionary<int, int>> GetActiveBookingCountsByDateAsync(DateTime date)
+    public async Task<Dictionary<(int ShuttleId, DateTime Date), int>> GetActiveBookingCountsAsync(
+        IReadOnlyCollection<int> shuttleIds)
     {
-        var (start, end) = GetDayRange(date);
+        if (shuttleIds.Count == 0) return new Dictionary<(int, DateTime), int>();
 
-        return await context.Bookings
+        var counts = await context.Bookings
             .AsNoTracking()
-            .Where(b => !b.IsCanceled && b.Date >= start && b.Date < end)
-            .GroupBy(b => b.ShuttleId)
-            .Select(group => new { ShuttleId = group.Key, Count = group.Count() })
-            .ToDictionaryAsync(item => item.ShuttleId, item => item.Count);
+            .Where(b => !b.IsCanceled && shuttleIds.Contains(b.ShuttleId))
+            .GroupBy(b => new { b.ShuttleId, Date = b.Date.Date })
+            .Select(group => new { group.Key.ShuttleId, group.Key.Date, Count = group.Count() })
+            .ToListAsync();
+
+        return counts.ToDictionary(item => (item.ShuttleId, item.Date), item => item.Count);
     }
 
     public async Task SaveChangesAsync() => await context.SaveChangesAsync();
