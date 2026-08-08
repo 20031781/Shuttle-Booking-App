@@ -113,8 +113,9 @@ public class BookingsController(IBookingService bookingService) : ControllerBase
     ///     Ottiene i posti disponibili per ogni shuttle nella data indicata.
     /// </summary>
     [HttpGet("GetShuttleAvailability")]
-    [AllowAnonymous]
+    [Authorize]
     [ProducesResponseType(typeof(IReadOnlyCollection<ShuttleAvailabilityDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<IReadOnlyCollection<ShuttleAvailabilityDto>>> GetShuttleAvailability(
         [FromQuery] DateTime? date = null)
     {

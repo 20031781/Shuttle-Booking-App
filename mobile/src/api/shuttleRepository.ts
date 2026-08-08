@@ -1,7 +1,7 @@
 import type {Shuttle} from '@/types/domain';
 import {t} from '@/i18n';
 import {apiConfig} from './config';
-import {getJson} from './httpClient';
+import {getJsonAuth} from './httpClient';
 import {shuttleApiListSchema} from './schemas';
 
 export interface ShuttleRepository {
@@ -56,7 +56,7 @@ const staticShuttles: Shuttle[] = [
 
 export class ApiShuttleRepository implements ShuttleRepository {
     async list(): Promise<Shuttle[]> {
-        const shuttles = await getJson('/Shuttles/GetShuttles', {schema: shuttleApiListSchema});
+        const shuttles = await getJsonAuth('/Shuttles/GetShuttles', {schema: shuttleApiListSchema});
 
         return shuttles.map(shuttle => ({
             id: String(shuttle.id),

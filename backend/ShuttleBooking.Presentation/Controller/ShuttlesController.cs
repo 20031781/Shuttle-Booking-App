@@ -21,7 +21,9 @@ public class ShuttlesController(IShuttleService shuttleService) : ControllerBase
     /// </summary>
     /// <param name="date">Data opzionale per calcolare i posti residui.</param>
     /// <returns>Una lista di shuttles.</returns>
+    [Authorize]
     [ProducesResponseType(typeof(IEnumerable<ShuttleDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [HttpGet("GetShuttles")]
     public async Task<ActionResult<IEnumerable<ShuttleDto>>> GetAllShuttles([FromQuery] DateTime? date = null)
     {
@@ -34,7 +36,9 @@ public class ShuttlesController(IShuttleService shuttleService) : ControllerBase
     /// </summary>
     /// <param name="id">L'ID dello shuttle.</param>
     /// <returns>Lo shuttle relativo all'ID fornito.</returns>
+    [Authorize]
     [ProducesResponseType(typeof(ShuttleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [HttpGet("GetShuttle/{id:int}")]
     public async Task<ActionResult<ShuttleDto>> GetShuttleById(int id)

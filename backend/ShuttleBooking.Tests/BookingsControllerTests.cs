@@ -37,8 +37,9 @@ public class BookingsControllerTests(CustomWebApplicationFactory factory) : ICla
         bookingResult.Booking.IsCanceled.Should().BeFalse();
         bookingResult.IsIdempotentReplay.Should().BeFalse();
 
-        var shuttlesResponse =
-            await _client.GetFromJsonAsync<List<ShuttleDto>>($"/Shuttles/GetShuttles?date={bookingDate:O}");
+        var shuttlesHttpResponse = await SendAuthorizedJsonAsync<object?>(
+            HttpMethod.Get, $"/Shuttles/GetShuttles?date={bookingDate:O}", null, token);
+        var shuttlesResponse = await shuttlesHttpResponse.Content.ReadFromJsonAsync<List<ShuttleDto>>();
         shuttlesResponse.Should().NotBeNull();
         var updatedShuttle = shuttlesResponse!.Single(s => s.Id == shuttle.Id);
         updatedShuttle.AvailableSeats.Should().Be(0);
@@ -193,8 +194,9 @@ public class BookingsControllerTests(CustomWebApplicationFactory factory) : ICla
         responses.Count(response => response.StatusCode == HttpStatusCode.Created).Should().Be(1);
         responses.Count(response => response.StatusCode == HttpStatusCode.Conflict).Should().Be(users - 1);
 
-        var availability =
-            await _client.GetFromJsonAsync<List<ShuttleDto>>($"/Shuttles/GetShuttles?date={bookingDate:O}");
+        var availabilityHttpResponse = await SendAuthorizedJsonAsync<object?>(
+            HttpMethod.Get, $"/Shuttles/GetShuttles?date={bookingDate:O}", null, tokens[0]);
+        var availability = await availabilityHttpResponse.Content.ReadFromJsonAsync<List<ShuttleDto>>();
         availability.Should().NotBeNull();
         availability!.Single(item => item.Id == shuttle.Id).AvailableSeats.Should().Be(0);
     }

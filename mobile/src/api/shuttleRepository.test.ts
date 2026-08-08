@@ -1,9 +1,9 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
-const getJsonMock = vi.fn();
+const getJsonAuthMock = vi.fn();
 
 vi.mock('./httpClient', () => ({
-    getJson: getJsonMock
+    getJsonAuth: getJsonAuthMock
 }));
 
 vi.mock('./config', () => ({
@@ -12,11 +12,11 @@ vi.mock('./config', () => ({
 
 describe('ApiShuttleRepository.list', () => {
     beforeEach(() => {
-        getJsonMock.mockReset();
+        getJsonAuthMock.mockReset();
     });
 
     it('mappa id a stringa e mantiene la data/ora di ritrovo', async () => {
-        getJsonMock.mockResolvedValueOnce([
+        getJsonAuthMock.mockResolvedValueOnce([
             {id: 7, name: 'Sede -> Aeroporto', capacity: 10, availableSeats: 4, meetingAtUtc: '2026-08-01T07:30:00Z'}
         ]);
 
@@ -31,7 +31,7 @@ describe('ApiShuttleRepository.list', () => {
     });
 
     it('usa la capacità come fallback quando availableSeats manca', async () => {
-        getJsonMock.mockResolvedValueOnce([
+        getJsonAuthMock.mockResolvedValueOnce([
             {id: 1, name: 'Navetta', capacity: 8, meetingAtUtc: '2026-08-01T07:30:00Z'}
         ]);
 
@@ -42,7 +42,7 @@ describe('ApiShuttleRepository.list', () => {
     });
 
     it('genera una data di ritrovo valida quando meetingAtUtc manca', async () => {
-        getJsonMock.mockResolvedValueOnce([{id: 2, name: 'Navetta', capacity: 5}]);
+        getJsonAuthMock.mockResolvedValueOnce([{id: 2, name: 'Navetta', capacity: 5}]);
 
         const {ApiShuttleRepository} = await import('./shuttleRepository');
         const [shuttle] = await new ApiShuttleRepository().list();

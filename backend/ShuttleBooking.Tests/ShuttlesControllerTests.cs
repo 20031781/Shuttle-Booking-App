@@ -115,6 +115,7 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
     public async Task GetAllShuttles_ReturnsSuccessAndCorrectContentType()
     {
         // Arrange
+        await AuthenticateAsManagerAsync();
         const string request = RequestBase + "GetShuttles";
 
         // Act
@@ -126,9 +127,23 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
+    public async Task GetAllShuttles_ReturnsUnauthorized_WithoutToken()
+    {
+        // Arrange
+        const string request = RequestBase + "GetShuttles";
+
+        // Act
+        var response = await _client.GetAsync(request);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task GetShuttleById_ReturnsNotFound_ForInvalidId()
     {
         // Arrange
+        await AuthenticateAsManagerAsync();
         const string request = RequestBase + "GetShuttle/99999";
 
         // Act
@@ -394,6 +409,10 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
         var response = await client.GetAsync(request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        // Con il fallback authorization policy globale, una route non mappata (Swagger
+        // non è registrato fuori da Development) restituisce 401 invece di 404: la
+        // richiesta anonima viene comunque bloccata prima ancora di scoprire che la
+        // route non esiste.
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }
