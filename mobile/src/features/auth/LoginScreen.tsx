@@ -19,12 +19,13 @@ import {
     loginWithPassword,
     type PasswordCredentials,
     registerWithPassword
-} from '../../api/authSession';
-import {apiConfig} from '../../api/config';
-import {t} from '../../i18n';
-import type {AppThemeColors} from '../../theme/colors';
-import {createGlobalStyles} from '../../theme/globalStyles';
-import {useAppTheme} from '../../theme/theme';
+} from '@/api/authSession';
+import {apiConfig} from '@/api/config';
+import {t} from '@/i18n';
+import type {AppThemeColors} from '@/theme/colors';
+import {createGlobalStyles} from '@/theme/globalStyles';
+import {useAppTheme} from '@/theme/theme';
+import {getFriendlyErrorMessage} from '@/lib/errors';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -32,7 +33,11 @@ function normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
 }
 
-export function LoginScreen() {
+type LoginScreenProps = {
+    forcedMessage?: string | null;
+};
+
+export function LoginScreen({forcedMessage = null}: LoginScreenProps) {
     const {colors} = useAppTheme();
     const styles = createStyles(colors);
     const globalStyles = createGlobalStyles(colors);
@@ -50,21 +55,21 @@ export function LoginScreen() {
 
     const hasGoogleConfig = Boolean(
         Platform.select({
-            android: apiConfig.googleAndroidClientId || apiConfig.googleExpoClientId,
-            ios: apiConfig.googleIosClientId || apiConfig.googleExpoClientId,
+            android: apiConfig.googleAndroidClientId ?? apiConfig.googleExpoClientId,
+            ios: apiConfig.googleIosClientId ?? apiConfig.googleExpoClientId,
             web: apiConfig.googleWebClientId,
-            default: ''
+            default: undefined
         })
     );
     const fallbackClientId = 'missing-google-client-id.apps.googleusercontent.com';
     const resolvedAndroidClientId =
-        apiConfig.googleAndroidClientId || apiConfig.googleExpoClientId || fallbackClientId;
+        apiConfig.googleAndroidClientId ?? apiConfig.googleExpoClientId ?? fallbackClientId;
     const resolvedIosClientId =
-        apiConfig.googleIosClientId || apiConfig.googleExpoClientId || fallbackClientId;
-    const resolvedWebClientId = apiConfig.googleWebClientId || fallbackClientId;
+        apiConfig.googleIosClientId ?? apiConfig.googleExpoClientId ?? fallbackClientId;
+    const resolvedWebClientId = apiConfig.googleWebClientId ?? fallbackClientId;
 
     const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
-        clientId: apiConfig.googleExpoClientId || resolvedWebClientId,
+        clientId: apiConfig.googleExpoClientId ?? resolvedWebClientId,
         androidClientId: resolvedAndroidClientId,
         iosClientId: resolvedIosClientId,
         webClientId: resolvedWebClientId,
@@ -74,7 +79,7 @@ export function LoginScreen() {
     });
 
     useEffect(() => {
-        if (!googleResponse || googleResponse.type !== 'success') {
+        if (googleResponse?.type !== 'success') {
             if (googleResponse?.type === 'error') {
                 setErrorMessage(t.auth.googleLoginFailed);
             }
@@ -91,7 +96,7 @@ export function LoginScreen() {
         setErrorMessage(null);
 
         void loginWithGoogle(pendingGoogleEmail, idToken)
-            .catch(error => setErrorMessage(error instanceof Error ? error.message : t.auth.loginFailed))
+            .catch(error => setErrorMessage(getFriendlyErrorMessage(error, t.auth.loginFailed)))
             .finally(() => setSubmitting(false));
     }, [googleResponse, pendingGoogleEmail]);
 
@@ -127,7 +132,7 @@ export function LoginScreen() {
         try {
             await action({email: normalizedEmail, password});
         } catch (error) {
-            setErrorMessage(error instanceof Error ? error.message : t.auth.loginFailed);
+            setErrorMessage(getFriendlyErrorMessage(error, t.auth.loginFailed));
         } finally {
             setSubmitting(false);
         }
@@ -208,9 +213,11 @@ export function LoginScreen() {
                     />
                 </View>
 
+                {forcedMessage ? <Text style={styles.infoText}>{forcedMessage}</Text> : null}
                 {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
                 <Pressable
+                    accessibilityRole="button"
                     disabled={submitting}
                     onPress={() => submitWithPassword(isSignUp ? registerWithPassword : loginWithPassword)}
                     style={[globalStyles.primaryButton, styles.primaryAction, submitting && styles.disabledAction]}>
@@ -220,6 +227,7 @@ export function LoginScreen() {
                 </Pressable>
 
                 <Pressable
+                    accessibilityRole="button"
                     disabled={submitting}
                     onPress={handleGoogleLogin}
                     style={[styles.googleButton, submitting && styles.disabledAction]}>
@@ -228,6 +236,7 @@ export function LoginScreen() {
                 </Pressable>
 
                 <Pressable
+                    accessibilityRole="button"
                     disabled={submitting}
                     onPress={() => {
                         setIsSignUp(current => !current);
@@ -297,6 +306,10 @@ const createStyles = (colors: AppThemeColors) =>
         },
         errorText: {
             color: colors.danger,
+            fontSize: 13
+        },
+        infoText: {
+            color: colors.primary,
             fontSize: 13
         },
         primaryAction: {

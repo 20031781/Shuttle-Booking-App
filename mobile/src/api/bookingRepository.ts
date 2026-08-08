@@ -1,25 +1,12 @@
-import type {Booking, BookingStatus} from '../types/domain';
-import {t} from '../i18n';
+import type {z} from 'zod';
+
+import type {Booking, BookingStatus} from '@/types/domain';
+import {t} from '@/i18n';
 import {apiConfig} from './config';
 import {getJsonAuth, postJsonAuth, putJsonAuth} from './httpClient';
+import {bookingActionApiSchema, bookingApiListSchema, type bookingApiSchema} from './schemas';
 
-type BookingApiDto = {
-    id: number;
-    userId: number;
-    userEmail: string;
-    shuttleId: number;
-    shuttleName: string;
-    date: string;
-    createdAt: string;
-    isCanceled: boolean;
-    canceledAt: string | null;
-};
-
-type BookingActionApiResponse = {
-    booking: BookingApiDto;
-    seatsRemaining: number;
-    isIdempotentReplay: boolean;
-};
+type BookingApiDto = z.infer<typeof bookingApiSchema>;
 
 export interface BookingRepository {
     list(): Promise<Booking[]>;
@@ -54,20 +41,23 @@ function createIdempotencyKey(shuttleId: string, date: Date): string {
 
 export class ApiBookingRepository implements BookingRepository {
     async list(): Promise<Booking[]> {
-        const bookings = await getJsonAuth<BookingApiDto[]>('/Bookings/GetUserHistory');
+        const bookings = await getJsonAuth('/Bookings/GetUserHistory', {schema: bookingApiListSchema});
         return bookings.map(booking => mapApiBooking(booking));
     }
 
     async create(shuttleId: string, date: Date = new Date()): Promise<Booking> {
         const idempotencyKey = createIdempotencyKey(shuttleId, date);
-        const response = await postJsonAuth<{ shuttleId: number; date: string }, BookingActionApiResponse>(
+        const response = await postJsonAuth(
             '/Bookings/CreateBooking',
             {
                 shuttleId: Number(shuttleId),
                 date: date.toISOString()
             },
             {
-                'X-Idempotency-Key': idempotencyKey
+                schema: bookingActionApiSchema,
+                headers: {
+                    'X-Idempotency-Key': idempotencyKey
+                }
             }
         );
 
@@ -75,17 +65,21 @@ export class ApiBookingRepository implements BookingRepository {
     }
 
     async cancel(bookingId: string): Promise<Booking> {
-        const response = await putJsonAuth<object, BookingActionApiResponse>(`/Bookings/CancelBooking/${bookingId}`);
+        const response = await putJsonAuth(
+            `/Bookings/CancelBooking/${bookingId}`,
+            undefined,
+            {schema: bookingActionApiSchema}
+        );
         return mapApiBooking(response.booking, response.seatsRemaining);
     }
 }
 
 export class StaticBookingRepository implements BookingRepository {
-    async list(): Promise<Booking[]> {
-        return [...staticBookings].sort((a, b) => b.date.localeCompare(a.date));
+    list(): Promise<Booking[]> {
+        return Promise.resolve([...staticBookings].sort((a, b) => b.date.localeCompare(a.date)));
     }
 
-    async create(shuttleId: string, date: Date = new Date()): Promise<Booking> {
+    create(shuttleId: string, date: Date = new Date()): Promise<Booking> {
         const booking: Booking = {
             id: String(Date.now()),
             shuttleId,
@@ -96,18 +90,18 @@ export class StaticBookingRepository implements BookingRepository {
         };
 
         staticBookings.unshift(booking);
-        return booking;
+        return Promise.resolve(booking);
     }
 
-    async cancel(bookingId: string): Promise<Booking> {
+    cancel(bookingId: string): Promise<Booking> {
         const booking = staticBookings.find(item => item.id === bookingId);
         if (!booking) {
-            throw new Error(t.bookings.bookingNotFound);
+            return Promise.reject(new Error(t.bookings.bookingNotFound));
         }
 
         booking.status = 'canceled';
         booking.seatsRemaining = 5;
-        return booking;
+        return Promise.resolve(booking);
     }
 }
 

@@ -1,5 +1,6 @@
 import {apiConfig} from './config';
-import {getJsonAuth} from './httpClient';
+import {getJsonAuth, heavyRequestTimeoutMs} from './httpClient';
+import {adminHealthApiSchema, adminOverviewApiSchema} from './schemas';
 
 export type AdminHealthStatus = 'Healthy' | 'Degraded' | 'Unhealthy' | 'Disabled';
 
@@ -55,11 +56,16 @@ function createOverviewPath(date?: Date): string {
 
 export class ApiAdminOpsRepository implements AdminOpsRepository {
     async getOverview(date?: Date): Promise<AdminOverview> {
-        return getJsonAuth<AdminOverview>(createOverviewPath(date));
+        // La overview aggrega prenotazioni e capienze su tutte le navette:
+        // è l'endpoint più pesante dell'app e merita più margine del default.
+        return getJsonAuth(createOverviewPath(date), {
+            schema: adminOverviewApiSchema,
+            timeoutMs: heavyRequestTimeoutMs
+        });
     }
 
     async getHealth(): Promise<AdminHealth> {
-        return getJsonAuth<AdminHealth>('/AdminOps/Health');
+        return getJsonAuth('/AdminOps/Health', {schema: adminHealthApiSchema});
     }
 }
 
@@ -114,12 +120,12 @@ const mockHealth: AdminHealth = {
 };
 
 export class StaticAdminOpsRepository implements AdminOpsRepository {
-    async getOverview(): Promise<AdminOverview> {
-        return mockOverview;
+    getOverview(): Promise<AdminOverview> {
+        return Promise.resolve(mockOverview);
     }
 
-    async getHealth(): Promise<AdminHealth> {
-        return mockHealth;
+    getHealth(): Promise<AdminHealth> {
+        return Promise.resolve(mockHealth);
     }
 }
 

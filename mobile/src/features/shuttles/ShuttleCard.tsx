@@ -1,24 +1,29 @@
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 
-import {t} from '../../i18n';
-import type {AppThemeColors} from '../../theme/colors';
-import {createGlobalStyles} from '../../theme/globalStyles';
-import {useAppTheme} from '../../theme/theme';
-import type {Shuttle} from '../../types/domain';
+import {useDialog} from '@/components/DialogProvider';
+import {LockedActionButton} from '@/components/LockedActionButton';
+import {t} from '@/i18n';
+import type {AppThemeColors} from '@/theme/colors';
+import {createGlobalStyles} from '@/theme/globalStyles';
+import {useAppTheme} from '@/theme/theme';
+import type {Shuttle} from '@/types/domain';
 
 type ShuttleCardProps = {
     shuttle: Shuttle;
+    hasActiveBooking?: boolean;
     bookingInProgress?: boolean;
     onBook?: (shuttle: Shuttle) => void;
 };
 
-export function ShuttleCard({shuttle, bookingInProgress = false, onBook}: ShuttleCardProps) {
+export function ShuttleCard({shuttle, hasActiveBooking = false, bookingInProgress = false, onBook}: ShuttleCardProps) {
     const {colors} = useAppTheme();
     const styles = createStyles(colors);
     const globalStyles = createGlobalStyles(colors);
+    const {showDialog} = useDialog();
     const noSeats = shuttle.seatsAvailable < 1;
     const lowSeats = shuttle.seatsAvailable > 0 && shuttle.seatsAvailable <= 3;
     const disabled = noSeats || bookingInProgress || !onBook;
+    const showBookButton = Boolean(onBook) && !hasActiveBooking;
     const seatsColor = noSeats ? colors.danger : lowSeats ? colors.warning : colors.success;
 
     return <View style={[globalStyles.card, styles.card]}>
@@ -34,15 +39,23 @@ export function ShuttleCard({shuttle, bookingInProgress = false, onBook}: Shuttl
         <Text style={[styles.seats, {color: seatsColor}]}>
             {t.shuttles.seatsLabel}: {noSeats ? t.shuttles.full : shuttle.seatsAvailable}
         </Text>
-        {onBook ? <Pressable
+        {showBookButton ? noSeats ? <LockedActionButton
+            label={t.shuttles.full}
+            explainAccessibilityLabel={t.shuttles.fullExplainAccessibility}
+            onExplain={() => showDialog({
+                title: t.shuttles.fullExplainTitle,
+                message: t.shuttles.fullExplainMessage(shuttle.routeName)
+            })}
+            style={styles.bookButton}
+        /> : <Pressable
             accessibilityRole="button"
             disabled={disabled}
-            onPress={() => onBook(shuttle)}
+            onPress={() => onBook?.(shuttle)}
             style={[globalStyles.primaryButton, styles.bookButton, disabled && styles.bookButtonDisabled]}>
             <Text style={globalStyles.primaryButtonText}>
-                {bookingInProgress ? t.shuttles.bookingInProgress : noSeats ? t.shuttles.full : t.shuttles.book}
+                {bookingInProgress ? t.shuttles.bookingInProgress : t.shuttles.book}
             </Text>
-        </Pressable> : null}
+        </Pressable> : hasActiveBooking ? <Text style={styles.bookedLabel}>{t.shuttles.booked}</Text> : null}
     </View>;
 }
 
@@ -90,8 +103,12 @@ const createStyles = (colors: AppThemeColors) =>
             fontSize: 14
         },
         bookButton: {
-            minWidth: 124,
             justifyContent: 'center'
+        },
+        bookedLabel: {
+            color: colors.primary,
+            fontWeight: '700',
+            fontSize: 13
         },
         bookButtonDisabled: {
             opacity: 0.45

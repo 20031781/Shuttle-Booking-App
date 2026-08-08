@@ -1,9 +1,14 @@
 export const it = {
+    common: {
+        ok: 'OK',
+        cancel: 'Annulla'
+    },
     app: {
         sections: {
             shuttle: 'Shuttle',
             bookings: 'Prenotazioni',
             admin: 'Admin',
+            manager: 'Manager',
             profile: 'Profilo'
         }
     },
@@ -13,7 +18,7 @@ export const it = {
         subtitle: 'Login classico oppure Google.',
         emailLabel: 'Email',
         passwordLabel: 'Password',
-        emailPlaceholder: 'nome@azienda.it',
+        emailPlaceholder: 'Email',
         passwordPlaceholder: 'Password',
         missingFields: 'Inserisci email e password.',
         signIn: 'Accedi',
@@ -28,7 +33,9 @@ export const it = {
         emailRequiredForGoogle: 'Inserisci prima la tua email per il login Google.',
         googleTokenMissingInResponse: 'Google non ha restituito un token id valido.',
         googleLoginFailed: 'Login Google non riuscito.',
-        loginFailed: 'Login non riuscito.'
+        loginFailed: 'Login non riuscito.',
+        reloginRequired: 'Sessione non valida o scaduta. Effettua di nuovo il login.',
+        sessionRestoreInProgress: 'Ripristino sessione in corso...'
     },
     updates: {
         requiredTitle: 'Aggiornamento richiesto',
@@ -41,15 +48,39 @@ export const it = {
     admin: {
         badge: 'Operazioni',
         title: 'Dashboard Admin',
-        subtitle: 'KPI e stato sistema in tempo reale',
+        subtitle: 'KPI, salute sistema e gestione navette',
         operationsTitle: 'Operatività giornaliera',
         healthTitle: 'Stato servizi',
         shuttleLoadTitle: 'Carico shuttle',
+        shuttleManagementTitle: 'Proponi e gestisci navette',
+        shuttleManagementSubtitle: 'Scegli una navetta esistente e imposta data/ora ritrovo.',
         loadErrorTitle: 'Impossibile caricare la dashboard admin',
         loadErrorMessage: 'Errore nel caricamento dei dati admin.',
+        createShuttleErrorMessage: 'Errore durante la creazione navetta.',
+        saveShuttleErrorMessage: 'Errore durante il salvataggio navetta.',
+        deleteShuttleErrorMessage: 'Errore durante la rimozione navetta.',
         retry: 'Riprova',
         empty: 'Nessun dato admin disponibile.',
         emptyShuttles: 'Nessuno shuttle disponibile.',
+        validationRouteRequired: 'Seleziona una navetta dall’elenco.',
+        validationRouteTemplateMissing: 'Template navetta non trovato. Aggiorna e riprova.',
+        createAction: 'Proponi navetta',
+        createInProgress: 'Creazione...',
+        saveAction: 'Salva',
+        saveInProgress: 'Salvataggio...',
+        deleteAction: 'Elimina',
+        meetingAtLabel: 'Ritrovo:',
+        invalidMeetingAt: 'Data/ora non valida',
+        selectRouteTitle: 'Scegli navetta',
+        selectRoutePlaceholder: 'Seleziona navetta da elenco',
+        selectMeetingTitle: 'Scegli data e ora',
+        closeSelector: 'Chiudi',
+        confirmMeeting: 'Conferma',
+        noRouteTemplates: 'Nessuna navetta disponibile per la selezione.',
+        deleteConfirmTitle: 'Conferma eliminazione',
+        deleteConfirmMessage: (name: string) => `Vuoi eliminare la navetta "${name}"?`,
+        deleteConfirmAction: 'Sì, elimina',
+        deleteConfirmDismiss: 'No',
         generatedAtLabel: 'Aggiornato alle',
         checkedAtLabel: 'Health check alle',
         metrics: {
@@ -70,6 +101,39 @@ export const it = {
             disabled: 'Disabilitato'
         }
     },
+    manager: {
+        badge: 'Gestione',
+        title: 'Manager Shuttle',
+        subtitle: 'Crea, modifica e rimuovi navette.',
+        loadErrorTitle: 'Impossibile caricare le navette',
+        loadErrorMessage: 'Errore nel caricamento navette manager.',
+        saveErrorMessage: 'Errore durante il salvataggio navetta.',
+        createErrorMessage: 'Errore durante la creazione navetta.',
+        deleteErrorMessage: 'Errore durante la rimozione navetta.',
+        retry: 'Riprova',
+        createTitle: 'Nuova navetta',
+        createAction: 'Crea navetta',
+        createInProgress: 'Creazione...',
+        saveAction: 'Salva',
+        saveInProgress: 'Salvataggio...',
+        deleteAction: 'Elimina',
+        deleteInProgress: 'Eliminazione...',
+        emptyTitle: 'Nessuna navetta',
+        empty: 'Non ci sono navette configurate.',
+        fieldName: 'Nome navetta',
+        fieldCapacity: 'Capienza',
+        placeholderName: 'Inserisci nome navetta',
+        placeholderCapacity: 'Capienza',
+        validationName: 'Inserisci il nome della navetta.',
+        validationCapacity: 'La capienza deve essere un numero tra 1 e 100.',
+        validationMeetingAt: 'Inserisci data e ora ritrovo in formato valido.',
+        placeholderMeetingDate: 'Data ritrovo (YYYY-MM-DD)',
+        placeholderMeetingTime: 'Ora ritrovo (HH:mm)',
+        deleteConfirmTitle: 'Conferma eliminazione',
+        deleteConfirmMessage: (name: string) => `Vuoi eliminare la navetta "${name}"?`,
+        deleteConfirmAction: 'Sì, elimina',
+        deleteConfirmDismiss: 'No'
+    },
     shuttles: {
         badge: 'Operativo',
         title: 'Shuttle',
@@ -80,11 +144,17 @@ export const it = {
         loadErrorTitle: 'Impossibile caricare le corse',
         loadErrorMessage: 'Errore nel caricamento degli shuttle.',
         bookingErrorMessage: 'Errore durante la prenotazione.',
+        booked: 'Prenotato',
         emptyTitle: 'Nessuna corsa trovata',
         empty: 'Nessuna corsa disponibile.',
         retry: 'Riprova',
         book: 'Prenota',
         full: 'Completo',
+        fullExplainTitle: 'Corsa al completo',
+        fullExplainMessage: (routeName: string) =>
+            `Tutti i posti di "${routeName}" sono già prenotati, quindi la prenotazione è bloccata. `
+            + 'L\'elenco si aggiorna da solo: se qualcuno annulla, il pulsante torna disponibile.',
+        fullExplainAccessibility: 'Perché non posso prenotare',
         bookingInProgress: 'Prenotazione...',
         departureLabel: 'Partenza',
         seatsLabel: 'Posti disponibili',
@@ -97,6 +167,8 @@ export const it = {
         subtitle: 'Storico utente',
         summaryActive: 'Attive',
         summaryCanceled: 'Annullate',
+        routePrefix: 'Navetta per:',
+        meetingPrefix: 'Ritrovo:',
         historyLoadErrorTitle: 'Impossibile caricare lo storico',
         historyLoadErrorMessage: 'Errore nel caricamento dello storico.',
         cancelErrorMessage: 'Errore durante l’annullamento.',
@@ -105,6 +177,11 @@ export const it = {
         retry: 'Riprova',
         cancel: 'Annulla',
         canceling: 'Annullamento...',
+        confirmCancelTitle: 'Conferma annullamento',
+        confirmCancelMessage: (shuttleName: string) =>
+            `Vuoi annullare la prenotazione per ${shuttleName}?`,
+        confirmCancelAction: 'Sì, annulla',
+        confirmCancelDismiss: 'No',
         statusLabel: 'Stato',
         dateLabel: 'Data',
         statusActive: 'Attiva',
@@ -118,25 +195,102 @@ export const it = {
         subtitle: 'Dati utente',
         loadErrorTitle: 'Impossibile caricare il profilo',
         loadErrorMessage: 'Errore nel caricamento del profilo.',
+        updateProfileFailed: 'Errore durante l’aggiornamento del profilo.',
+        nameRequired: 'Inserisci nome e cognome.',
+        nameOrUsernameRequired: 'Inserisci nome, cognome e username.',
         unavailable: 'Profilo non disponibile.',
         retry: 'Riprova',
+        editName: 'Modifica nome',
+        saveName: 'Salva nome',
+        savingName: 'Salvataggio...',
+        cancelEdit: 'Annulla',
+        missingValue: 'Non impostato',
         logout: 'Logout',
         loggingOut: 'Logout...',
+        themeSelectorTitle: 'Tema app',
+        themeSelectorSubtitle: 'Seleziona stile grafico globale (solo admin).',
+        themeLoading: 'Caricamento preferenze tema...',
+        themeOptions: {
+            system: 'Tema attuale',
+            auroraGlass: 'Aurora Glass'
+        },
         labels: {
-            fullName: 'Nome',
+            fullName: 'Nome completo',
+            firstName: 'Nome',
+            lastName: 'Cognome',
+            username: 'Username',
             email: 'Email',
-            company: 'Azienda'
+            city: 'Città',
+            club: 'Club'
+        },
+        placeholders: {
+            firstName: 'Inserisci nome',
+            lastName: 'Inserisci cognome',
+            username: 'Inserisci username',
+            club: 'Inserisci club',
+            city: 'Inserisci città'
         },
         fallback: {
-            fullName: 'Utente Demo',
+            firstName: 'Demo',
+            lastName: 'Demo',
+            username: 'utente_demo',
             email: 'demo@shuttlebooking.app',
-            company: 'Shuttle Booking'
+            city: 'Roma',
+            club: 'Shuttle Club'
+        }
+    },
+    profileCompletion: {
+        badge: 'Primo accesso',
+        title: 'Completa il profilo',
+        subtitle: 'Inserisci i dati obbligatori per continuare.',
+        loading: 'Caricamento dati profilo...',
+        loadErrorTitle: 'Impossibile verificare il profilo',
+        loadErrorMessage: 'Errore nel caricamento dati profilo.',
+        checklistTitle: 'Dati mancanti',
+        requiredError: 'Compila nome, cognome, club e città.',
+        cityFormatError: 'Inserisci una città valida (solo lettere, spazi o apostrofi).',
+        cityHint: 'Usa lettere e spazi, ad esempio: Reggio Emilia',
+        updateFailed: 'Errore durante il completamento del profilo.',
+        submit: 'Conferma dati',
+        saving: 'Salvataggio...',
+        retry: 'Riprova'
+    },
+    profileSettings: {
+        badge: 'Preferenze',
+        title: 'Impostazioni App',
+        subtitle: 'Notifiche e comportamento dell’app.',
+        back: 'Profilo',
+        loadError: 'Impossibile caricare le preferenze notifiche.',
+        saveError: 'Impossibile salvare la preferenza.',
+        updatePreview: {
+            title: 'Anteprima aggiornamento',
+            subtitle: 'Forza la schermata di aggiornamento per verificarla, senza pubblicare una nuova versione.',
+            none: 'Disattiva',
+            optional: 'Facoltativo',
+            required: 'Obbligatorio'
+        },
+        items: {
+            bookingConfirmationsTitle: 'Conferma prenotazione',
+            bookingConfirmationsSubtitle: 'Notifica quando la prenotazione è confermata.',
+            bookingCancellationsTitle: 'Annullamento prenotazione',
+            bookingCancellationsSubtitle: 'Notifica quando una prenotazione viene annullata.',
+            shuttleReminderOneHourTitle: 'Promemoria 1 ora prima',
+            shuttleReminderOneHourSubtitle: 'Avviso un’ora prima del ritrovo.',
+            shuttleReminderDayBeforeTitle: 'Promemoria giorno prima',
+            shuttleReminderDayBeforeSubtitle: 'Avviso il giorno precedente alla corsa.',
+            seatAvailabilityAlertsTitle: 'Posto disponibile',
+            seatAvailabilityAlertsSubtitle: 'Avviso quando si libera un posto su una navetta seguita.',
+            systemAnnouncementsTitle: 'Comunicazioni servizio',
+            systemAnnouncementsSubtitle: 'Notifiche operative e avvisi importanti dal team ShuttleBooking.'
         }
     },
     api: {
         requestFailed: (statusCode: number) => `Richiesta fallita: ${statusCode}`,
         requestTimeout: 'La richiesta al server ha superato il tempo massimo di attesa.',
         authRequired: 'Sessione non autenticata. Effettua il login per continuare.',
+        invalidResponse: (path: string) =>
+            `Risposta del server non valida per ${path}. Aggiorna l'app o riprova più tardi.`,
+        offlineBadge: 'Offline',
         networkUnavailable: (baseUrl: string) =>
             `Server non raggiungibile (${baseUrl}). Verifica URL API e rete: su Android emulatore usa 10.0.2.2, su device usa l'IP LAN del tuo PC.`
     },
@@ -148,9 +302,9 @@ export const it = {
         },
         departureUnknown: '--:--',
         user: {
-            lastName: 'App',
+            lastName: 'Demo',
             city: 'Roma',
-            firstNameFallback: 'Utente'
+            firstNameFallback: 'Demo'
         }
     }
 } as const;

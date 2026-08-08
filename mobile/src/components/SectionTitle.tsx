@@ -1,7 +1,9 @@
 import {StyleSheet, Text, View} from 'react-native';
 
-import type {AppThemeColors} from '../theme/colors';
-import {useAppTheme} from '../theme/theme';
+import {useSessionSnapshot} from '@/hooks/useSessionSnapshot';
+import type {AppThemeColors} from '@/theme/colors';
+import {useAppTheme} from '@/theme/theme';
+import {OfflineBadge} from './OfflineBadge';
 
 type SectionTitleProps = {
     title: string;
@@ -10,11 +12,17 @@ type SectionTitleProps = {
 };
 
 export function SectionTitle({title, subtitle, badge}: SectionTitleProps) {
-    const {colors} = useAppTheme();
+    const {colors, mode} = useAppTheme();
     const styles = createStyles(colors);
+    // La modalità offline esiste già nella sessione: qui diventa finalmente visibile,
+    // e su ogni schermata, perché SectionTitle è l'intestazione comune.
+    const {isOfflineMode} = useSessionSnapshot();
 
-    return <View style={styles.container}>
-        {badge ? <Text style={styles.badge}>{badge}</Text> : null}
+    return <View style={[styles.container, mode === 'aurora' && styles.containerAurora]}>
+        <View style={styles.headerRow}>
+            {badge ? <Text style={[styles.badge, mode === 'aurora' && styles.badgeAurora]}>{badge}</Text> : null}
+            {isOfflineMode ? <OfflineBadge/> : null}
+        </View>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
     </View>;
@@ -31,12 +39,27 @@ const createStyles = (colors: AppThemeColors) =>
             paddingVertical: 14,
             gap: 2
         },
+        containerAurora: {
+            backgroundColor: 'rgba(8, 24, 42, 0.84)',
+            borderColor: 'rgba(0, 201, 122, 0.25)'
+        },
+        headerRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            minHeight: 16
+        },
         badge: {
             color: colors.primary,
             fontSize: 11,
             fontWeight: '700',
             letterSpacing: 0.5,
             textTransform: 'uppercase'
+        },
+        badgeAurora: {
+            letterSpacing: 1,
+            color: '#00d18a'
         },
         title: {
             fontSize: 25,

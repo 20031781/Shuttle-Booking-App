@@ -1,24 +1,54 @@
-import {t} from '../i18n';
-import {apiConfig} from './config';
+import type {z} from 'zod';
 
-type LoginApiResponse = {
-    token: string;
-    expiration: string;
-    refreshToken: string;
-    refreshTokenExpiration: string;
-};
+import {t} from '@/i18n';
+import type {UserProfile} from '@/types/domain';
+import {apiConfig} from './config';
+import {loginApiSchema} from './schemas';
+import {isNetworkOnline} from './networkStatus';
+import {
+    clearStoredSessionTokens,
+    clearStoredSessionUser,
+    loadStoredSessionTokens,
+    loadStoredSessionUser,
+    saveStoredSessionTokens,
+    saveStoredSessionUser,
+    type StoredSessionTokens
+} from './sessionStorage';
+
+type LoginApiResponse = z.infer<typeof loginApiSchema>;
+
+type UserApiResponse = LoginApiResponse['user'];
+
+/**
+ * Valida la risposta di autenticazione prima di fidarsene: è il payload da cui
+ * derivano token e identità, quindi una forma inattesa deve fallire subito e in
+ * modo esplicito invece di propagare campi mancanti dentro la sessione.
+ */
+function parseLoginPayload(raw: unknown): LoginApiResponse {
+    const result = loginApiSchema.safeParse(raw);
+    if (!result.success) {
+        throw new Error(t.auth.loginFailed);
+    }
+
+    return result.data;
+}
 
 type RegisterUserRequest = {
     email: string;
-    firstName: string;
-    lastName: string;
     authProvider: string;
     password: string;
     phoneCountryCode: string;
-    city: string;
 };
 
-type SessionListener = (isAuthenticated: boolean) => void;
+type SessionState = {
+    tokens: AuthSession | null;
+    user: UserProfile | null;
+    isOfflineMode: boolean;
+    requiresRelogin: boolean;
+    reloginMessage: string | null;
+};
+
+type SessionStateListener = (snapshot: SessionSnapshot) => void;
 
 export type PasswordCredentials = {
     email: string;
@@ -32,22 +62,41 @@ export type AuthSession = {
     refreshTokenExpiration: string;
 };
 
+export type SessionSnapshot = {
+    isAuthenticated: boolean;
+    isOfflineMode: boolean;
+    requiresRelogin: boolean;
+    reloginMessage: string | null;
+    user: UserProfile | null;
+};
+
+export class ReloginRequiredError extends Error {
+    readonly code = 'RELOGIN_REQUIRED';
+
+    constructor(message: string = t.auth.reloginRequired) {
+        super(message);
+        this.name = 'ReloginRequiredError';
+    }
+}
+
 const requestTimeoutMs = 10_000;
 const expirySkewMs = 30_000;
 
-let session: AuthSession | null = null;
+const initialSessionState: SessionState = {
+    tokens: null,
+    user: null,
+    isOfflineMode: false,
+    requiresRelogin: false,
+    reloginMessage: null
+};
+
+let state: SessionState = {...initialSessionState};
+let hasBootstrapped = false;
+let pendingBootstrapPromise: Promise<SessionSnapshot> | null = null;
 let pendingRefreshPromise: Promise<AuthSession> | null = null;
-const listeners = new Set<SessionListener>();
+let pendingRecoveryPromise: Promise<SessionSnapshot> | null = null;
 
-function notifySessionChanged() {
-    const authenticated = hasActiveSession();
-    listeners.forEach(listener => listener(authenticated));
-}
-
-function setSession(nextSession: AuthSession | null) {
-    session = nextSession;
-    notifySessionChanged();
-}
+const sessionStateListeners = new Set<SessionStateListener>();
 
 function createAbortController() {
     const controller = new AbortController();
@@ -59,7 +108,7 @@ function normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
 }
 
-function isExpired(expiresAtIso: string): boolean {
+function isTokenExpired(expiresAtIso: string): boolean {
     const expiresAtMs = Date.parse(expiresAtIso);
     if (Number.isNaN(expiresAtMs)) {
         return true;
@@ -68,7 +117,54 @@ function isExpired(expiresAtIso: string): boolean {
     return expiresAtMs - Date.now() <= expirySkewMs;
 }
 
-function toSession(payload: LoginApiResponse): AuthSession {
+function isTokenPayloadValid(tokens: StoredSessionTokens | null): tokens is AuthSession {
+    if (!tokens) {
+        return false;
+    }
+
+    return typeof tokens.accessToken === 'string'
+        && tokens.accessToken.length > 0
+        && typeof tokens.accessTokenExpiration === 'string'
+        && tokens.accessTokenExpiration.length > 0
+        && typeof tokens.refreshToken === 'string'
+        && tokens.refreshToken.length > 0
+        && typeof tokens.refreshTokenExpiration === 'string'
+        && tokens.refreshTokenExpiration.length > 0;
+}
+
+function normalizeUserProfile(user: UserProfile | null): UserProfile | null {
+    if (!user) {
+        return null;
+    }
+
+    if (typeof user.email !== 'string' || user.email.trim().length === 0) {
+        return null;
+    }
+
+    return {
+        firstName: typeof user.firstName === 'string' ? user.firstName : '',
+        lastName: typeof user.lastName === 'string' ? user.lastName : '',
+        email: user.email,
+        city: typeof user.city === 'string' ? user.city : '',
+        club: typeof user.club === 'string' ? user.club : '',
+        username: typeof user.username === 'string' ? user.username : '',
+        isProfileCompleted: Boolean(user.isProfileCompleted)
+    };
+}
+
+function mapApiUserToProfile(user: UserApiResponse): UserProfile {
+    return {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        city: user.city,
+        club: user.club ?? '',
+        username: user.username ?? '',
+        isProfileCompleted: user.isProfileCompleted
+    };
+}
+
+function mapApiSession(payload: LoginApiResponse): AuthSession {
     return {
         accessToken: payload.token,
         accessTokenExpiration: payload.expiration,
@@ -78,27 +174,96 @@ function toSession(payload: LoginApiResponse): AuthSession {
 }
 
 function buildDefaultRegisterPayload(email: string, password: string): RegisterUserRequest {
-    const prefix = email.split('@')[0] || t.mock.user.firstNameFallback.toLowerCase();
-    const normalized = prefix.replace(/[^a-zA-Z]/g, '');
-    const firstName = normalized.length > 0 ? normalized : t.mock.user.firstNameFallback;
-
     return {
         email,
-        firstName,
-        lastName: t.mock.user.lastName,
         authProvider: 'App',
         password,
-        phoneCountryCode: '+39',
-        city: t.mock.user.city
+        phoneCountryCode: '+39'
     };
 }
 
+function isAuthenticatedSnapshot(nextState: SessionState): boolean {
+    if (!nextState.user) {
+        return false;
+    }
+
+    return nextState.tokens != null || nextState.isOfflineMode;
+}
+
+function toSnapshot(nextState = state): SessionSnapshot {
+    return {
+        isAuthenticated: isAuthenticatedSnapshot(nextState),
+        isOfflineMode: nextState.isOfflineMode,
+        requiresRelogin: nextState.requiresRelogin,
+        reloginMessage: nextState.reloginMessage,
+        user: nextState.user
+    };
+}
+
+function notifySessionChanged() {
+    const snapshot = toSnapshot();
+    sessionStateListeners.forEach(listener => listener(snapshot));
+}
+
+function setAuthenticatedRemote(nextTokens: AuthSession, nextUser: UserProfile) {
+    state = {
+        tokens: nextTokens,
+        user: nextUser,
+        isOfflineMode: false,
+        requiresRelogin: false,
+        reloginMessage: null
+    };
+    notifySessionChanged();
+}
+
+function setAuthenticatedOffline(nextUser: UserProfile, nextTokens: AuthSession | null) {
+    state = {
+        tokens: nextTokens,
+        user: nextUser,
+        isOfflineMode: true,
+        requiresRelogin: false,
+        reloginMessage: null
+    };
+    notifySessionChanged();
+}
+
+function setSignedOut(requiresRelogin: boolean, reloginMessage?: string) {
+    state = {
+        tokens: null,
+        user: null,
+        isOfflineMode: false,
+        requiresRelogin,
+        reloginMessage: requiresRelogin ? reloginMessage ?? t.auth.reloginRequired : null
+    };
+    notifySessionChanged();
+}
+
+async function persistSession(nextTokens: AuthSession, nextUser: UserProfile): Promise<void> {
+    await Promise.all([saveStoredSessionTokens(nextTokens), saveStoredSessionUser(nextUser)]);
+}
+
+async function clearPersistedSession(): Promise<void> {
+    await Promise.all([clearStoredSessionTokens(), clearStoredSessionUser()]);
+}
+
+async function isNetworkOnlineSafe(): Promise<boolean> {
+    try {
+        return await isNetworkOnline();
+    } catch {
+        return false;
+    }
+}
+
 function mapRequestError(error: unknown, fallbackMessage: string): Error {
+    if (isReloginRequiredError(error)) {
+        return error;
+    }
+
     if (error instanceof Error && error.name === 'AbortError') {
         return new Error(t.api.requestTimeout);
     }
 
-    if (error instanceof TypeError) {
+    if (isNetworkRequestError(error)) {
         return new Error(t.api.networkUnavailable(apiConfig.baseUrl));
     }
 
@@ -111,15 +276,42 @@ function mapRequestError(error: unknown, fallbackMessage: string): Error {
 
 async function parseErrorMessage(response: Response): Promise<string> {
     try {
-        const data = await response.json() as { message?: string };
+        const data = await response.json() as { message?: string; error?: string };
         if (typeof data.message === 'string' && data.message.length > 0) {
             return data.message;
         }
+
+        if (typeof data.error === 'string' && data.error.length > 0) {
+            return data.error;
+        }
     } catch {
-        // Ignore and fallback
+        // Ignore and fallback.
     }
 
     return t.api.requestFailed(response.status);
+}
+
+function isAuthTerminalStatus(statusCode: number): boolean {
+    return statusCode === 401 || statusCode === 403;
+}
+
+async function saveAndApplyRemoteSession(nextSession: AuthSession, nextUser: UserProfile): Promise<void> {
+    await persistSession(nextSession, nextUser);
+    setAuthenticatedRemote(nextSession, nextUser);
+}
+
+function normalizeAuthPayload(payload: LoginApiResponse): {
+    session: AuthSession;
+    user: UserProfile;
+} {
+    const nextSession = mapApiSession(payload);
+    if (!isTokenPayloadValid(nextSession)) {
+        throw new Error(t.auth.loginFailed);
+    }
+
+    // Dopo `parseLoginPayload` il payload contiene sempre un utente valido:
+    // non serve più un fallback all'utente in cache.
+    return {session: nextSession, user: mapApiUserToProfile(payload.user)};
 }
 
 async function submitLoginRequest(path: string, body: object): Promise<AuthSession> {
@@ -138,10 +330,10 @@ async function submitLoginRequest(path: string, body: object): Promise<AuthSessi
             throw new Error(await parseErrorMessage(response));
         }
 
-        const payload = await response.json() as LoginApiResponse;
-        const currentSession = toSession(payload);
-        setSession(currentSession);
-        return currentSession;
+        const payload = parseLoginPayload(await response.json());
+        const normalized = normalizeAuthPayload(payload);
+        await saveAndApplyRemoteSession(normalized.session, normalized.user);
+        return normalized.session;
     } catch (error) {
         throw mapRequestError(error, t.auth.loginFailed);
     } finally {
@@ -149,45 +341,224 @@ async function submitLoginRequest(path: string, body: object): Promise<AuthSessi
     }
 }
 
-export function subscribeToSessionChanges(listener: SessionListener): () => void {
-    listeners.add(listener);
-    listener(hasActiveSession());
-
-    return () => listeners.delete(listener);
-}
-
-export function hasActiveSession(): boolean {
-    if (!session) {
-        return false;
+async function ensureBootstrapped(): Promise<void> {
+    if (hasBootstrapped) {
+        return;
     }
 
-    return !isExpired(session.accessTokenExpiration) || !isExpired(session.refreshTokenExpiration);
+    await initializeSessionOnAppStart();
 }
 
-export async function registerWithPassword(credentials: PasswordCredentials): Promise<void> {
-    const email = normalizeEmail(credentials.email);
-    const {controller, timeout} = createAbortController();
+async function recoverSessionIfPossibleInternal(): Promise<SessionSnapshot> {
+    const currentUser = state.user;
+    const currentTokens = state.tokens;
+    const isOnline = await isNetworkOnlineSafe();
+
+    if (!currentUser) {
+        if (currentTokens) {
+            await clearStoredSessionTokens();
+        }
+
+        setSignedOut(false);
+        return toSnapshot();
+    }
+
+    if (!currentTokens || !isTokenPayloadValid(currentTokens)) {
+        if (isOnline) {
+            await invalidateSessionForRelogin();
+            return toSnapshot();
+        }
+
+        setAuthenticatedOffline(currentUser, null);
+        return toSnapshot();
+    }
+
+    if (!isTokenExpired(currentTokens.accessTokenExpiration)) {
+        if (isOnline) {
+            setAuthenticatedRemote(currentTokens, currentUser);
+            return toSnapshot();
+        }
+
+        setAuthenticatedOffline(currentUser, currentTokens);
+        return toSnapshot();
+    }
+
+    if (isTokenExpired(currentTokens.refreshTokenExpiration)) {
+        if (isOnline) {
+            await invalidateSessionForRelogin();
+            return toSnapshot();
+        }
+
+        setAuthenticatedOffline(currentUser, null);
+        return toSnapshot();
+    }
+
+    if (!isOnline) {
+        setAuthenticatedOffline(currentUser, currentTokens);
+        return toSnapshot();
+    }
 
     try {
-        const registerResponse = await fetch(`${apiConfig.baseUrl}/User/register`, {
+        await refreshAccessToken();
+        return toSnapshot();
+    } catch (error) {
+        if (isReloginRequiredError(error)) {
+            return toSnapshot();
+        }
+
+        if (isNetworkRequestError(error)) {
+            setAuthenticatedOffline(currentUser, currentTokens);
+            return toSnapshot();
+        }
+
+        throw error;
+    }
+}
+
+async function refreshSession(): Promise<AuthSession> {
+    const currentTokens = state.tokens;
+    const currentUser = state.user;
+
+    if (!currentTokens?.refreshToken || isTokenExpired(currentTokens.refreshTokenExpiration)) {
+        const isOnline = await isNetworkOnlineSafe();
+        if (!isOnline && currentUser) {
+            setAuthenticatedOffline(currentUser, null);
+            throw new Error(t.api.networkUnavailable(apiConfig.baseUrl));
+        }
+
+        throw await invalidateSessionForRelogin();
+    }
+
+    const {controller, timeout} = createAbortController();
+    try {
+        const response = await fetch(`${apiConfig.baseUrl}/User/RefreshToken`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(buildDefaultRegisterPayload(email, credentials.password)),
+            body: JSON.stringify({
+                refreshToken: currentTokens.refreshToken
+            }),
             signal: controller.signal
         });
 
-        if (!registerResponse.ok) {
-            throw new Error(await parseErrorMessage(registerResponse));
+        if (!response.ok) {
+            if (isAuthTerminalStatus(response.status)) {
+                throw await invalidateSessionForRelogin(await parseErrorMessage(response));
+            }
+
+            throw new Error(await parseErrorMessage(response));
         }
+
+        const payload = parseLoginPayload(await response.json());
+        const normalized = normalizeAuthPayload(payload);
+        await saveAndApplyRemoteSession(normalized.session, normalized.user);
+        return normalized.session;
     } catch (error) {
-        throw mapRequestError(error, t.auth.loginFailed);
+        if (isReloginRequiredError(error)) {
+            throw error;
+        }
+
+        const mappedError = mapRequestError(error, t.api.authRequired);
+        if (isNetworkRequestError(error) && currentUser) {
+            setAuthenticatedOffline(currentUser, currentTokens);
+        }
+
+        throw mappedError;
     } finally {
         clearTimeout(timeout);
     }
+}
 
-    await loginWithPassword(credentials);
+export function isReloginRequiredError(error: unknown): error is ReloginRequiredError {
+    return error instanceof ReloginRequiredError;
+}
+
+export function isNetworkRequestError(error: unknown): boolean {
+    if (error instanceof Error && error.name === 'AbortError') {
+        return true;
+    }
+
+    if (error instanceof TypeError) {
+        return true;
+    }
+
+    if (!(error instanceof Error)) {
+        return false;
+    }
+
+    const message = error.message.toLowerCase();
+    return message.includes('network request failed')
+        || message.includes('failed to fetch')
+        || message.includes('network error')
+        || message.includes(t.api.requestTimeout.toLowerCase())
+        || message.includes('server non raggiungibile');
+}
+
+export function getSessionSnapshot(): SessionSnapshot {
+    return toSnapshot();
+}
+
+export function subscribeToSessionState(listener: SessionStateListener): () => void {
+    sessionStateListeners.add(listener);
+    listener(toSnapshot());
+
+    return () => sessionStateListeners.delete(listener);
+}
+
+export async function initializeSessionOnAppStart(): Promise<SessionSnapshot> {
+    pendingBootstrapPromise ??= (async () => {
+        const [storedTokens, storedUser] = await Promise.all([
+            loadStoredSessionTokens(),
+            loadStoredSessionUser()
+        ]);
+
+        state = {
+            tokens: isTokenPayloadValid(storedTokens) ? storedTokens : null,
+            user: normalizeUserProfile(storedUser),
+            isOfflineMode: false,
+            requiresRelogin: false,
+            reloginMessage: null
+        };
+        notifySessionChanged();
+        hasBootstrapped = true;
+
+        return recoverSessionIfPossibleInternal();
+    })()
+        .catch(async () => {
+            hasBootstrapped = true;
+            await clearPersistedSession();
+            setSignedOut(false);
+            return toSnapshot();
+        })
+        .finally(() => {
+            pendingBootstrapPromise = null;
+        });
+
+    return pendingBootstrapPromise;
+}
+
+export async function recoverSessionIfPossible(): Promise<SessionSnapshot> {
+    await ensureBootstrapped();
+
+    pendingRecoveryPromise ??= recoverSessionIfPossibleInternal().finally(() => {
+        pendingRecoveryPromise = null;
+    });
+
+    return pendingRecoveryPromise;
+}
+
+export async function invalidateSessionForRelogin(message?: string): Promise<ReloginRequiredError> {
+    await clearPersistedSession();
+    setSignedOut(true, message);
+    return new ReloginRequiredError(message);
+}
+
+export async function registerWithPassword(credentials: PasswordCredentials): Promise<void> {
+    await submitLoginRequest('/User/register', buildDefaultRegisterPayload(
+        normalizeEmail(credentials.email),
+        credentials.password
+    ));
 }
 
 export async function loginWithPassword(credentials: PasswordCredentials): Promise<void> {
@@ -204,95 +575,88 @@ export async function loginWithGoogle(email: string, googleToken: string): Promi
     });
 }
 
-async function refreshSession(): Promise<AuthSession> {
-    if (!session?.refreshToken || isExpired(session.refreshTokenExpiration)) {
-        setSession(null);
-        throw new Error(t.api.authRequired);
+export async function getAccessToken(): Promise<string> {
+    await ensureBootstrapped();
+
+    const currentTokens = state.tokens;
+    const currentUser = state.user;
+
+    if (!currentUser) {
+        throw await invalidateSessionForRelogin();
     }
 
-    const {controller, timeout} = createAbortController();
-    try {
-        const response = await fetch(`${apiConfig.baseUrl}/User/RefreshToken`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                refreshToken: session.refreshToken
-            }),
-            signal: controller.signal
-        });
-
-        if (!response.ok) {
-            setSession(null);
-            throw new Error(await parseErrorMessage(response));
+    if (!currentTokens) {
+        const isOnline = await isNetworkOnlineSafe();
+        if (isOnline) {
+            throw await invalidateSessionForRelogin();
         }
 
-        const payload = await response.json() as LoginApiResponse;
-        const refreshed = toSession(payload);
-        setSession(refreshed);
-        return refreshed;
-    } catch (error) {
-        throw mapRequestError(error, t.api.authRequired);
-    } finally {
-        clearTimeout(timeout);
-    }
-}
-
-async function ensureSession(): Promise<AuthSession> {
-    if (!session) {
-        throw new Error(t.api.authRequired);
+        setAuthenticatedOffline(currentUser, null);
+        throw new Error(t.api.networkUnavailable(apiConfig.baseUrl));
     }
 
-    if (!isExpired(session.accessTokenExpiration)) {
-        return session;
+    if (!isTokenExpired(currentTokens.accessTokenExpiration)) {
+        return currentTokens.accessToken;
     }
 
-    if (isExpired(session.refreshTokenExpiration)) {
-        setSession(null);
-        throw new Error(t.api.authRequired);
+    if (isTokenExpired(currentTokens.refreshTokenExpiration)) {
+        const isOnline = await isNetworkOnlineSafe();
+        if (isOnline) {
+            throw await invalidateSessionForRelogin();
+        }
+
+        setAuthenticatedOffline(currentUser, null);
+        throw new Error(t.api.networkUnavailable(apiConfig.baseUrl));
     }
 
-    return refreshAccessToken();
-}
-
-export async function getAccessToken(): Promise<string> {
-    const current = await ensureSession();
-    return current.accessToken;
+    const refreshed = await refreshAccessToken();
+    return refreshed.accessToken;
 }
 
 export async function refreshAccessToken(): Promise<AuthSession> {
-    if (!pendingRefreshPromise) {
-        pendingRefreshPromise = refreshSession().finally(() => {
-            pendingRefreshPromise = null;
-        });
-    }
+    await ensureBootstrapped();
+
+    pendingRefreshPromise ??= refreshSession().finally(() => {
+        pendingRefreshPromise = null;
+    });
 
     return pendingRefreshPromise;
 }
 
 export async function logoutCurrentSession(): Promise<void> {
-    if (!session) {
-        return;
-    }
+    await ensureBootstrapped();
 
-    let accessToken = session.accessToken;
-    if (isExpired(session.accessTokenExpiration) && !isExpired(session.refreshTokenExpiration)) {
-        accessToken = (await refreshAccessToken()).accessToken;
-    }
+    const currentTokens = state.tokens;
 
-    const {controller, timeout} = createAbortController();
     try {
-        await fetch(`${apiConfig.baseUrl}/User/Logout`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${accessToken}`
-            },
-            signal: controller.signal
-        });
+        if (!currentTokens) {
+            return;
+        }
+
+        let accessToken = currentTokens.accessToken;
+        if (isTokenExpired(currentTokens.accessTokenExpiration) && !isTokenExpired(currentTokens.refreshTokenExpiration)) {
+            try {
+                accessToken = (await refreshAccessToken()).accessToken;
+            } catch {
+                accessToken = currentTokens.accessToken;
+            }
+        }
+
+        const {controller, timeout} = createAbortController();
+        try {
+            await fetch(`${apiConfig.baseUrl}/User/Logout`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${accessToken}`
+                },
+                signal: controller.signal
+            });
+        } finally {
+            clearTimeout(timeout);
+        }
     } finally {
-        clearTimeout(timeout);
-        setSession(null);
+        await clearPersistedSession();
+        setSignedOut(false);
     }
 }
 
@@ -315,6 +679,10 @@ export async function registerDeviceToken(token: string, platform: 'ios' | 'andr
         });
 
         if (!response.ok) {
+            if (isAuthTerminalStatus(response.status)) {
+                throw await invalidateSessionForRelogin(await parseErrorMessage(response));
+            }
+
             throw new Error(await parseErrorMessage(response));
         }
     } catch (error) {
@@ -322,4 +690,46 @@ export async function registerDeviceToken(token: string, platform: 'ios' | 'andr
     } finally {
         clearTimeout(timeout);
     }
+}
+
+export async function cacheUserProfile(profile: UserProfile): Promise<void> {
+    const normalizedUser = normalizeUserProfile(profile);
+    if (!normalizedUser) {
+        return;
+    }
+
+    state = {
+        ...state,
+        user: normalizedUser
+    };
+    notifySessionChanged();
+
+    await saveStoredSessionUser(normalizedUser);
+}
+
+export async function getCachedUserProfile(): Promise<UserProfile | null> {
+    if (state.user) {
+        return state.user;
+    }
+
+    const storedUser = normalizeUserProfile(await loadStoredSessionUser());
+    if (storedUser) {
+        state = {
+            ...state,
+            user: storedUser
+        };
+    }
+
+    return storedUser;
+}
+
+export function __resetSessionForTests(): Promise<void> {
+    state = {...initialSessionState};
+    hasBootstrapped = false;
+    pendingBootstrapPromise = null;
+    pendingRefreshPromise = null;
+    pendingRecoveryPromise = null;
+    sessionStateListeners.clear();
+
+    return Promise.resolve();
 }

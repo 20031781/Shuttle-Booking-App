@@ -8,7 +8,7 @@ function extractHostFromScriptUrl(scriptUrl: string | undefined): string | null 
     }
 
     const match = scriptUrl.match(/^[a-z]+:\/\/([^/:?#]+)/i);
-    if (!match || !match[1]) {
+    if (!match?.[1]) {
         return null;
     }
 
@@ -56,11 +56,24 @@ function normalizeBaseUrl(rawBaseUrl: string): string {
     return rawBaseUrl.replace(/\/+$/, '');
 }
 
+/**
+ * Una variabile assente o vuota vale `undefined`, non stringa vuota: così
+ * "non configurato" è un solo valore e i fallback possono usare `??`.
+ */
+function readOptionalEnv(value: string | undefined): string | undefined {
+    const normalized = value?.trim();
+    if (!normalized) {
+        return undefined;
+    }
+
+    return normalized;
+}
+
 export const apiConfig = {
-    baseUrl: normalizeBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL ?? defaultApiBaseUrl),
-    googleExpoClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_EXPO ?? '',
-    googleAndroidClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID ?? '',
-    googleIosClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS ?? '',
-    googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB ?? '',
+    baseUrl: normalizeBaseUrl(process.env.EXPO_PUBLIC_API_URL ?? defaultApiBaseUrl),
+    googleExpoClientId: readOptionalEnv(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_EXPO),
+    googleAndroidClientId: readOptionalEnv(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID),
+    googleIosClientId: readOptionalEnv(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS),
+    googleWebClientId: readOptionalEnv(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB),
     mockMode: process.env.EXPO_PUBLIC_MOCK_MODE === 'true'
 };

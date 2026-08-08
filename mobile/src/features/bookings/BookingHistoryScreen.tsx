@@ -1,15 +1,17 @@
 import {useEffect, useState} from 'react';
 import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Ionicons} from '@expo/vector-icons';
 
-import {createBookingRepository} from '../../api/bookingRepository';
-import {PageContainer} from '../../components/PageContainer';
-import {SectionTitle} from '../../components/SectionTitle';
-import {SkeletonBlock} from '../../components/SkeletonBlock';
-import {t} from '../../i18n';
-import type {AppThemeColors} from '../../theme/colors';
-import {createGlobalStyles} from '../../theme/globalStyles';
-import {useAppTheme} from '../../theme/theme';
-import type {Booking} from '../../types/domain';
+import {createBookingRepository} from '@/api/bookingRepository';
+import {useDialog} from '@/components/DialogProvider';
+import {PageContainer} from '@/components/PageContainer';
+import {SkeletonBlock} from '@/components/SkeletonBlock';
+import {t} from '@/i18n';
+import type {AppThemeColors} from '@/theme/colors';
+import {createGlobalStyles} from '@/theme/globalStyles';
+import {useAppTheme} from '@/theme/theme';
+import type {Booking} from '@/types/domain';
+import {getFriendlyErrorMessage} from '@/lib/errors';
 
 const bookingRepository = createBookingRepository();
 const skeletonRows = Array.from({length: 3}, (_, index) => `booking-skeleton-${index}`);
@@ -21,50 +23,56 @@ function BookingHistorySkeleton() {
 
     return <View style={styles.skeletonList}>
         {skeletonRows.map(rowId => <View key={rowId} style={[globalStyles.card, styles.card]}>
-            <SkeletonBlock style={styles.skeletonTitle}/>
-            <SkeletonBlock style={styles.skeletonDate}/>
-            <SkeletonBlock style={styles.skeletonStatus}/>
+            <SkeletonBlock style={styles.skeletonLineWide}/>
+            <SkeletonBlock style={styles.skeletonLineMedium}/>
         </View>)}
     </View>;
 }
 
-function formatDate(dateIso: string): string {
+function formatMeeting(dateIso: string): string {
     const date = new Date(dateIso);
     if (Number.isNaN(date.getTime())) {
         return dateIso;
     }
 
-    return date.toLocaleDateString('it-IT', {
+    const datePart = date.toLocaleDateString('it-IT', {
         year: 'numeric',
-        month: '2-digit',
+        month: 'short',
         day: '2-digit'
     });
+    const timePart = date.toLocaleTimeString('it-IT', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    return `${datePart} · ${timePart}`;
 }
 
 type BookingSummaryProps = {
     activeCount: number;
     canceledCount: number;
+    isAurora: boolean;
 };
 
-function BookingSummary({activeCount, canceledCount}: BookingSummaryProps) {
+function BookingSummary({activeCount, canceledCount, isAurora}: BookingSummaryProps) {
     const {colors} = useAppTheme();
     const styles = createStyles(colors);
-    const globalStyles = createGlobalStyles(colors);
 
-    return <View style={[globalStyles.card, styles.summaryCard]}>
-        <View style={styles.metric}>
+    return <View style={styles.summaryCard}>
+        <View style={[styles.metricCard, isAurora ? styles.metricCardAurora : styles.metricCardDefault]}>
             <Text style={styles.metricLabel}>{t.bookings.summaryActive}</Text>
-            <Text style={[styles.metricValue, styles.statusActive]}>{activeCount}</Text>
+            <Text style={[styles.metricValue, styles.metricActive]}>{activeCount}</Text>
         </View>
-        <View style={styles.metric}>
+        <View style={[styles.metricCard, isAurora ? styles.metricCardAurora : styles.metricCardDefault]}>
             <Text style={styles.metricLabel}>{t.bookings.summaryCanceled}</Text>
-            <Text style={[styles.metricValue, styles.statusCanceled]}>{canceledCount}</Text>
+            <Text style={[styles.metricValue, styles.metricCanceled]}>{canceledCount}</Text>
         </View>
     </View>;
 }
 
 export function BookingHistoryScreen() {
-    const {colors} = useAppTheme();
+    const {colors, mode} = useAppTheme();
+    const isAurora = mode === 'aurora';
     const styles = createStyles(colors);
     const globalStyles = createGlobalStyles(colors);
     const [bookings, setBookings] = useState<Booking[]>([]);
@@ -72,6 +80,7 @@ export function BookingHistoryScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [cancelingId, setCancelingId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const {showDialog} = useDialog();
 
     async function loadBookings() {
         setError(null);
@@ -80,7 +89,7 @@ export function BookingHistoryScreen() {
             const history = await bookingRepository.list();
             setBookings(history);
         } catch (requestError) {
-            setError(requestError instanceof Error ? requestError.message : t.bookings.historyLoadErrorMessage);
+            setError(getFriendlyErrorMessage(requestError, t.bookings.historyLoadErrorMessage));
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -95,10 +104,25 @@ export function BookingHistoryScreen() {
             await bookingRepository.cancel(booking.id);
             await loadBookings();
         } catch (requestError) {
-            setError(requestError instanceof Error ? requestError.message : t.bookings.cancelErrorMessage);
+            setError(getFriendlyErrorMessage(requestError, t.bookings.cancelErrorMessage));
         } finally {
             setCancelingId(null);
         }
+    }
+
+    function confirmCancel(booking: Booking) {
+        showDialog({
+            title: t.bookings.confirmCancelTitle,
+            message: t.bookings.confirmCancelMessage(booking.shuttleName),
+            actions: [
+                {label: t.bookings.confirmCancelDismiss, variant: 'ghost'},
+                {
+                    label: t.bookings.confirmCancelAction,
+                    variant: 'danger',
+                    onPress: () => void handleCancel(booking)
+                }
+            ]
+        });
     }
 
     useEffect(() => void loadBookings(), []);
@@ -107,9 +131,16 @@ export function BookingHistoryScreen() {
     const canceledCount = bookings.filter(booking => booking.status === 'canceled').length;
 
     return <PageContainer>
-        <SectionTitle title={t.bookings.title} subtitle={t.bookings.subtitle} badge={t.bookings.badge}/>
-        {!loading && !error && bookings.length > 0 ?
-            <BookingSummary activeCount={activeCount} canceledCount={canceledCount}/> : null}
+        <View style={[styles.headerCard, isAurora ? styles.headerCardAurora : styles.headerCardDefault]}>
+            <Text style={[styles.headerBadge, isAurora && styles.headerBadgeAurora]}>{t.bookings.badge}</Text>
+            <Text style={styles.headerTitle}>{t.bookings.title}</Text>
+            <Text style={styles.headerSubtitle}>{t.bookings.subtitle}</Text>
+        </View>
+        {!loading && !error && bookings.length > 0 ? <BookingSummary
+            activeCount={activeCount}
+            canceledCount={canceledCount}
+            isAurora={isAurora}
+        /> : null}
         {loading ? <BookingHistorySkeleton/> : error ? <View style={[globalStyles.card, styles.card]}>
             <Text style={styles.errorTitle}>{t.bookings.historyLoadErrorTitle}</Text>
             <Text style={styles.errorMessage}>{error}</Text>
@@ -135,32 +166,52 @@ export function BookingHistoryScreen() {
                 void loadBookings();
             }}
             renderItem={({item}) => {
-                const canCancel = item.status === 'active';
+                const isActive = item.status === 'active';
                 const inProgress = cancelingId === item.id;
-                const statusLabel = canCancel ? t.bookings.statusActive : t.bookings.statusCanceled;
 
-                return <View style={[globalStyles.card, styles.card]}>
+                return <View style={[
+                    globalStyles.card,
+                    styles.card,
+                    isActive
+                        ? isAurora
+                            ? styles.cardActiveAurora
+                            : styles.cardActive
+                        : styles.cardInactive
+                ]}>
                     <View style={styles.titleRow}>
-                        <Text style={styles.title}>{item.shuttleName}</Text>
-                        <View
+                        <Text
                             style={[
-                                styles.statusPill,
-                                canCancel ? styles.statusPillActive : styles.statusPillCanceled
+                                styles.routeName,
+                                !isActive && styles.routeNameInactive
                             ]}>
-                            <Text style={styles.statusPillText}>{statusLabel}</Text>
-                        </View>
+                            {item.shuttleName}
+                        </Text>
+                        {isActive ? <View style={[styles.activeBadge, isAurora && styles.activeBadgeAurora]}>
+                            <Text style={styles.activeBadgeText}>{t.bookings.statusActive}</Text>
+                        </View> : <View style={styles.inactiveBadge}>
+                            <Text style={styles.inactiveBadgeText}>{t.bookings.statusCanceled}</Text>
+                        </View>}
                     </View>
-                    <Text style={styles.date}>
-                        {t.bookings.dateLabel}: {formatDate(item.date)}
-                    </Text>
-                    <Text style={[styles.status, canCancel ? styles.statusActive : styles.statusCanceled]}>
-                        {t.bookings.statusLabel}: {statusLabel}
-                    </Text>
-                    {canCancel ? <Pressable
+                    <View style={styles.meetingRow}>
+                        <Ionicons
+                            name="calendar-clear-outline"
+                            size={13}
+                            color={isActive ? colors.subtleText : colors.mutedText}
+                        />
+                        <Text style={[styles.meetingLine, !isActive && styles.meetingLineInactive]}>
+                            {formatMeeting(item.date)}
+                        </Text>
+                    </View>
+                    {isActive ? <Pressable
                         accessibilityRole="button"
                         disabled={inProgress}
-                        onPress={() => void handleCancel(item)}
-                        style={[globalStyles.outlineButton, styles.cancelButton, inProgress && styles.cancelButtonDisabled]}>
+                        onPress={() => confirmCancel(item)}
+                        style={[
+                            globalStyles.outlineButton,
+                            styles.cancelButton,
+                            isAurora && styles.cancelButtonAurora,
+                            inProgress && styles.cancelButtonDisabled
+                        ]}>
                         <Text style={globalStyles.outlineButtonText}>
                             {inProgress ? t.bookings.canceling : t.bookings.cancel}
                         </Text>
@@ -173,14 +224,61 @@ export function BookingHistoryScreen() {
 
 const createStyles = (colors: AppThemeColors) =>
     StyleSheet.create({
+        headerCard: {
+            borderRadius: 22,
+            borderWidth: 1,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            gap: 2
+        },
+        headerCardDefault: {
+            backgroundColor: colors.backgroundAccent,
+            borderColor: colors.border
+        },
+        headerCardAurora: {
+            backgroundColor: 'rgba(8, 24, 42, 0.86)',
+            borderColor: 'rgba(0, 201, 122, 0.26)'
+        },
+        headerBadge: {
+            color: colors.primary,
+            fontSize: 11,
+            fontWeight: '700',
+            letterSpacing: 0.5,
+            textTransform: 'uppercase'
+        },
+        headerBadgeAurora: {
+            color: '#00d18a',
+            letterSpacing: 1
+        },
+        headerTitle: {
+            fontSize: 34,
+            fontWeight: '800',
+            color: colors.text
+        },
+        headerSubtitle: {
+            color: colors.subtleText,
+            fontSize: 14
+        },
         summaryCard: {
             flexDirection: 'row',
             justifyContent: 'space-between',
-            gap: 8
+            gap: 10
         },
-        metric: {
+        metricCard: {
             flex: 1,
+            borderRadius: 16,
+            borderWidth: 1,
+            paddingHorizontal: 14,
+            paddingVertical: 12,
             gap: 4
+        },
+        metricCardDefault: {
+            backgroundColor: colors.surfaceElevated,
+            borderColor: colors.border
+        },
+        metricCardAurora: {
+            backgroundColor: 'rgba(16, 46, 71, 0.6)',
+            borderColor: 'rgba(112, 168, 219, 0.3)'
         },
         metricLabel: {
             color: colors.subtleText,
@@ -188,15 +286,34 @@ const createStyles = (colors: AppThemeColors) =>
         },
         metricValue: {
             color: colors.text,
-            fontSize: 22,
-            fontWeight: '700'
+            fontSize: 28,
+            fontWeight: '800'
+        },
+        metricActive: {
+            color: colors.success
+        },
+        metricCanceled: {
+            color: colors.text
         },
         skeletonList: {
             gap: 10,
             paddingBottom: 24
         },
         card: {
-            gap: 8
+            gap: 10,
+            borderWidth: 1
+        },
+        cardActive: {
+            borderColor: colors.success,
+            backgroundColor: colors.primarySoft
+        },
+        cardActiveAurora: {
+            borderColor: 'rgba(0, 209, 138, 0.55)',
+            backgroundColor: 'rgba(9, 38, 58, 0.82)'
+        },
+        cardInactive: {
+            borderColor: colors.borderStrong,
+            backgroundColor: colors.surfaceSecondary
         },
         titleRow: {
             flexDirection: 'row',
@@ -204,59 +321,75 @@ const createStyles = (colors: AppThemeColors) =>
             alignItems: 'center',
             gap: 10
         },
-        skeletonTitle: {
-            width: '72%',
-            height: 18,
+        skeletonLineWide: {
+            width: '78%',
+            height: 16,
             borderRadius: 9
         },
-        skeletonDate: {
-            width: '45%',
+        skeletonLineMedium: {
+            width: '56%',
             height: 14,
             borderRadius: 7
         },
-        skeletonStatus: {
-            width: '38%',
-            height: 14,
-            borderRadius: 7
-        },
-        title: {
+        routeName: {
             color: colors.text,
             fontWeight: '700',
-            fontSize: 16,
+            fontSize: 23,
             flex: 1
         },
-        statusPill: {
-            borderRadius: 12,
-            paddingHorizontal: 8,
-            paddingVertical: 4
+        routeNameInactive: {
+            color: colors.mutedText,
+            textDecorationLine: 'line-through'
         },
-        statusPillActive: {
-            backgroundColor: colors.primarySoft
+        meetingRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6
         },
-        statusPillCanceled: {
-            backgroundColor: colors.surfaceSecondary
-        },
-        statusPillText: {
-            color: colors.text,
-            fontSize: 12,
-            fontWeight: '600'
-        },
-        date: {
+        meetingLine: {
             color: colors.subtleText,
-            fontSize: 14
+            fontSize: 15
         },
-        status: {
-            fontWeight: '600',
-            fontSize: 13
-        },
-        statusActive: {
-            color: colors.success
-        },
-        statusCanceled: {
+        meetingLineInactive: {
             color: colors.mutedText
         },
+        activeBadge: {
+            borderRadius: 999,
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            backgroundColor: colors.primarySoft,
+            borderWidth: 1,
+            borderColor: colors.success
+        },
+        activeBadgeAurora: {
+            backgroundColor: 'rgba(0, 201, 122, 0.15)',
+            borderColor: 'rgba(0, 201, 122, 0.45)'
+        },
+        activeBadgeText: {
+            color: colors.success,
+            fontSize: 11,
+            fontWeight: '700',
+            textTransform: 'uppercase'
+        },
+        inactiveBadge: {
+            borderRadius: 999,
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            backgroundColor: colors.backgroundAccent,
+            borderWidth: 1,
+            borderColor: colors.border
+        },
+        inactiveBadgeText: {
+            color: colors.mutedText,
+            fontSize: 11,
+            fontWeight: '700',
+            textTransform: 'uppercase'
+        },
         cancelButton: {
-            marginTop: 0
+            marginTop: 2
+        },
+        cancelButtonAurora: {
+            backgroundColor: 'rgba(255, 255, 255, 0.05)'
         },
         cancelButtonDisabled: {
             opacity: 0.5
