@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using ShuttleBooking.Business.Models;
+using ShuttleBooking.Business.Models.Admin;
 using ShuttleBooking.Business.Models.Push;
 using ShuttleBooking.Business.Models.User;
 using ShuttleBooking.Business.Services;
@@ -13,27 +15,34 @@ namespace ShuttleBooking.Presentation.Controller;
 /// </summary>
 [ApiController]
 [Route("[controller]")]
-public class UserController(IUserService userService, IPushNotificationService pushNotificationService) : ControllerBase
+public class UserController(
+    IUserService userService,
+    IPushNotificationService pushNotificationService,
+    IOptions<AdminDashboardOptions> adminOptionsAccessor,
+    IOptions<ManagerDashboardOptions> managerOptionsAccessor) : ControllerBase
 {
+    private readonly AdminDashboardOptions _adminOptions = adminOptionsAccessor.Value;
+    private readonly ManagerDashboardOptions _managerOptions = managerOptionsAccessor.Value;
+
     /// <summary>
     ///     Registra un nuovo utente.
     /// </summary>
     /// <param name="request">I dati dell'utente da registrare.</param>
-    /// <returns>L'utente registrato.</returns>
+    /// <returns>Dati di sessione del nuovo utente.</returns>
     /// <response code="201">Utente registrato con successo.</response>
     /// <response code="400">Errore nella richiesta.</response>
     /// <response code="409">Utente già esistente con questa email.</response>
     [HttpPost("register")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<UserDto>> Register([FromBody] RegisterUserRequest request)
+    public async Task<ActionResult<LoginResponse>> Register([FromBody] RegisterUserRequest request)
     {
         try
         {
-            var user = await userService.RegisterUserAsync(request);
-            return CreatedAtAction(nameof(GetMe), null, user);
+            var response = await userService.RegisterAndLoginAsync(request);
+            return StatusCode(StatusCodes.Status201Created, response);
         }
         catch (ArgumentException ex)
         {
@@ -136,6 +145,47 @@ public class UserController(IUserService userService, IPushNotificationService p
     }
 
     /// <summary>
+    ///     Completa il profilo utente al primo accesso.
+    /// </summary>
+    [HttpPut("CompleteProfile")]
+    [Authorize]
+    [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<UserDto>> CompleteProfile([FromBody] CompleteUserProfileRequest request)
+    {
+        if (!TryGetUserId(out var userId))
+            return Unauthorized(new ErrorResponse
+            {
+                Message = "Token utente non valido.",
+                StatusCode = StatusCodes.Status401Unauthorized
+            });
+
+        try
+        {
+            var updatedUser = await userService.CompleteUserProfileAsync(userId, request);
+            return Ok(updatedUser);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ErrorResponse
+            {
+                Message = ex.Message,
+                StatusCode = StatusCodes.Status400BadRequest
+            });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new ErrorResponse
+            {
+                Message = ex.Message,
+                StatusCode = StatusCodes.Status404NotFound
+            });
+        }
+    }
+
+    /// <summary>
     ///     Registra o aggiorna il push token del device corrente.
     /// </summary>
     [HttpPost("DeviceToken")]
@@ -155,6 +205,39 @@ public class UserController(IUserService userService, IPushNotificationService p
         try
         {
             await userService.RegisterDeviceTokenAsync(userId, request);
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new ErrorResponse
+            {
+                Message = ex.Message,
+                StatusCode = StatusCodes.Status404NotFound
+            });
+        }
+    }
+
+    /// <summary>
+    ///     Aggiorna le preferenze di notifica push dell'utente autenticato.
+    /// </summary>
+    [HttpPut("NotificationPreferences")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateNotificationPreferences(
+        [FromBody] UpdateNotificationPreferencesRequest request)
+    {
+        if (!TryGetUserId(out var userId))
+            return Unauthorized(new ErrorResponse
+            {
+                Message = "Token utente non valido.",
+                StatusCode = StatusCodes.Status401Unauthorized
+            });
+
+        try
+        {
+            await userService.UpdateNotificationPreferencesAsync(userId, request);
             return NoContent();
         }
         catch (KeyNotFoundException ex)
@@ -279,10 +362,100 @@ public class UserController(IUserService userService, IPushNotificationService p
         });
     }
 
+    /// <summary>
+    ///     Aggiorna nome e cognome dell'utente autenticato.
+    /// </summary>
+    [HttpPut("Me")]
+    [Authorize]
+    [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<UserDto>> UpdateMe([FromBody] UpdateUserNameRequest request)
+    {
+        if (!TryGetUserId(out var userId))
+            return Unauthorized(new ErrorResponse
+            {
+                Message = "Token utente non valido.",
+                StatusCode = StatusCodes.Status401Unauthorized
+            });
+
+        try
+        {
+            var updatedUser = await userService.UpdateUserNameAsync(userId, request);
+            return Ok(updatedUser);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ErrorResponse
+            {
+                Message = ex.Message,
+                StatusCode = StatusCodes.Status400BadRequest
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new ErrorResponse
+            {
+                Message = ex.Message,
+                StatusCode = StatusCodes.Status409Conflict
+            });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new ErrorResponse
+            {
+                Message = ex.Message,
+                StatusCode = StatusCodes.Status404NotFound
+            });
+        }
+    }
+
+    /// <summary>
+    ///     Restituisce i permessi utente per sezioni condizionali app.
+    /// </summary>
+    [HttpGet("Access")]
+    [Authorize]
+    [ProducesResponseType(typeof(UserAccessDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public ActionResult<UserAccessDto> GetAccess()
+    {
+        if (!TryGetUserEmail(out var email))
+            return Unauthorized(new ErrorResponse
+            {
+                Message = "Token utente non valido.",
+                StatusCode = StatusCodes.Status401Unauthorized
+            });
+
+        return Ok(new UserAccessDto
+        {
+            IsAdmin = IsAllowedEmail(email, _adminOptions.AllowedEmails),
+            IsManager = IsAllowedEmail(email, _managerOptions.AllowedEmails)
+        });
+    }
+
     private bool TryGetUserId(out int userId)
     {
         userId = 0;
         var rawUserId = User.FindFirstValue("userId") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
         return int.TryParse(rawUserId, out userId);
+    }
+
+    private bool TryGetUserEmail(out string email)
+    {
+        email = User.FindFirstValue(ClaimTypes.Email)
+                ?? User.FindFirstValue("email")
+                ?? string.Empty;
+        return !string.IsNullOrWhiteSpace(email);
+    }
+
+    private static bool IsAllowedEmail(string email, IEnumerable<string> allowedEmails)
+    {
+        var allowedList = allowedEmails.ToList();
+        if (allowedList.Count == 0) return false;
+
+        return allowedList.Any(allowedEmail =>
+            string.Equals(allowedEmail, email, StringComparison.OrdinalIgnoreCase));
     }
 }

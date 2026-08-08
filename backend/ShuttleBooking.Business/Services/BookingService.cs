@@ -4,12 +4,13 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using ShuttleBooking.Business.DTOs;
+using ShuttleBooking.Business.Models.Push;
 using ShuttleBooking.Data;
 using ShuttleBooking.Data.Entities;
 
 namespace ShuttleBooking.Business.Services;
 
-public class BookingService(AppDbContext dbContext) : IBookingService
+public class BookingService(AppDbContext dbContext, IPushNotificationService pushNotificationService) : IBookingService
 {
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> BookingLocks = new();
 
@@ -63,9 +64,16 @@ public class BookingService(AppDbContext dbContext) : IBookingService
                 await dbContext.SaveChangesAsync();
                 if (transaction != null) await transaction.CommitAsync();
 
+                if (user.NotifyOnBookingConfirmation)
+                    await TrySendPushAsync(
+                        userId,
+                        "Prenotazione confermata",
+                        $"Prenotazione confermata per {shuttle.Name} il {bookingDate:dd/MM/yyyy}.",
+                        PushNotificationTypes.BookingConfirmed);
+
                 return new BookingActionResponse
                 {
-                    Booking = Map(booking, user.Email, shuttle.Name),
+                    Booking = Map(booking, user.Username, user.Email, shuttle.Name),
                     SeatsRemaining = shuttle.Capacity - (activeCount + 1),
                     IsIdempotentReplay = false
                 };
@@ -109,7 +117,8 @@ public class BookingService(AppDbContext dbContext) : IBookingService
         if (booking.UserId != userId)
             throw new UnauthorizedAccessException("Non puoi annullare una prenotazione di un altro utente.");
 
-        if (!booking.IsCanceled)
+        var wasAlreadyCanceled = booking.IsCanceled;
+        if (!wasAlreadyCanceled)
         {
             booking.IsCanceled = true;
             booking.CanceledAt = DateTime.UtcNow;
@@ -126,9 +135,16 @@ public class BookingService(AppDbContext dbContext) : IBookingService
         var activeCount = await GetActiveBookingCountAsync(booking.ShuttleId, booking.Date);
         if (transaction != null) await transaction.CommitAsync();
 
+        if (!wasAlreadyCanceled && booking.User.NotifyOnBookingCancellation)
+            await TrySendPushAsync(
+                booking.UserId,
+                "Prenotazione annullata",
+                $"La tua prenotazione per {booking.Shuttle.Name} è stata annullata.",
+                PushNotificationTypes.BookingCanceled);
+
         return new BookingActionResponse
         {
-            Booking = Map(booking, booking.User.Email, booking.Shuttle.Name),
+            Booking = Map(booking, booking.User.Username, booking.User.Email, booking.Shuttle.Name),
             SeatsRemaining = booking.Shuttle.Capacity - activeCount,
             IsIdempotentReplay = false
         };
@@ -148,7 +164,7 @@ public class BookingService(AppDbContext dbContext) : IBookingService
             .ToListAsync();
 
         return bookings
-            .Select(booking => Map(booking, user.Email, booking.Shuttle?.Name ?? string.Empty))
+            .Select(booking => Map(booking, user.Username, user.Email, booking.Shuttle?.Name ?? string.Empty))
             .ToList();
     }
 
@@ -224,7 +240,11 @@ public class BookingService(AppDbContext dbContext) : IBookingService
 
         return new BookingActionResponse
         {
-            Booking = Map(existingBooking, existingBooking.User.Email, existingBooking.Shuttle.Name),
+            Booking = Map(
+                existingBooking,
+                existingBooking.User.Username,
+                existingBooking.User.Email,
+                existingBooking.Shuttle.Name),
             SeatsRemaining = seatsRemaining,
             IsIdempotentReplay = true
         };
@@ -235,6 +255,25 @@ public class BookingService(AppDbContext dbContext) : IBookingService
         var start = date.Date;
         var end = start.AddDays(1);
         return (start, end);
+    }
+
+    private async Task TrySendPushAsync(int userId, string title, string body, string notificationType)
+    {
+        try
+        {
+            // Il data payload permette all'app di aprire la sezione giusta al tap
+            // sulla notifica: senza `type` il tap aprirebbe solo la schermata iniziale.
+            var data = new Dictionary<string, string>
+            {
+                ["type"] = notificationType
+            };
+
+            await pushNotificationService.SendToUserAsync(userId, title, body, data);
+        }
+        catch
+        {
+            // Invio push best-effort: non deve far fallire l'operazione di prenotazione.
+        }
     }
 
     private static string? NormalizeIdempotencyKey(string? idempotencyKey)
@@ -269,11 +308,12 @@ public class BookingService(AppDbContext dbContext) : IBookingService
             .SingleOrDefaultAsync();
     }
 
-    private static BookingDto Map(Booking booking, string userEmail, string shuttleName) =>
+    private static BookingDto Map(Booking booking, string? userName, string userEmail, string shuttleName) =>
         new()
         {
             Id = booking.Id,
             UserId = booking.UserId,
+            UserDisplayName = !string.IsNullOrWhiteSpace(userName) ? userName : userEmail.Split('@')[0],
             UserEmail = userEmail,
             ShuttleId = booking.ShuttleId,
             ShuttleName = shuttleName,

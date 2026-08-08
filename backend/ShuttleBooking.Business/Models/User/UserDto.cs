@@ -13,4 +13,7 @@ public class UserDto
     public required string PhoneCountryCode { get; set; }
     public string? Address { get; set; }
     public required string City { get; set; }
+    public string? Username { get; set; }
+    public string? Club { get; set; }
+    public bool IsProfileCompleted { get; set; }
 }

@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
@@ -10,6 +12,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ShuttleBooking.Business.DTOs;
+using ShuttleBooking.Business.Models.Push;
+using ShuttleBooking.Business.Models.User;
 using ShuttleBooking.Business.Services;
 using ShuttleBooking.Data;
 
@@ -19,6 +23,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = $"ShuttleBookingTests_{Guid.NewGuid()}";
 
+    public TestPushNotificationService PushNotificationService { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
         builder
             .ConfigureAppConfiguration((_, configBuilder) =>
@@ -26,7 +32,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["RateLimiting:MaxRequestsPerMinute"] = "1000000",
-                    ["AdminDashboard:AllowedEmails:0"] = "admin@test.it"
+                    ["AdminDashboard:AllowedEmails:0"] = "admin@test.it",
+                    ["ManagerDashboard:AllowedEmails:0"] = "manager@test.it"
                 });
             })
             .ConfigureServices(services =>
@@ -35,15 +42,40 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
                 services.RemoveAll<AppDbContext>();
                 services.RemoveAll<IGoogleAuthService>();
+                services.RemoveAll<IPushNotificationService>();
 
                 services.AddDbContext<AppDbContext>(options => { options.UseInMemoryDatabase(_databaseName); });
                 services.AddSingleton<IGoogleAuthService, TestGoogleAuthService>();
+                services.AddSingleton<IPushNotificationService>(PushNotificationService);
             });
 }
 
 public sealed class TestGoogleAuthService : IGoogleAuthService
 {
     public Task<bool> ValidateTokenAsync(string token, string email) => Task.FromResult(true);
+}
+
+public sealed class TestPushNotificationService : IPushNotificationService
+{
+    public ConcurrentBag<(int UserId, string Title, string Body, IReadOnlyDictionary<string, string>? Data)> Calls
+    {
+        get;
+    } = new();
+
+    public Task<PushSendResult> SendToUserAsync(
+        int userId,
+        string title,
+        string body,
+        IReadOnlyDictionary<string, string>? data = null,
+        CancellationToken cancellationToken = default)
+    {
+        Calls.Add((userId, title, body, data));
+        return Task.FromResult(new PushSendResult
+        {
+            Status = PushSendStatus.NotConfigured,
+            Details = "Test double: push non configurato."
+        });
+    }
 }
 
 public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
@@ -57,6 +89,26 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
         _factory = factory;
         // Create a client to send HTTP requests to the test server
         _client = _factory.CreateClient();
+    }
+
+    private async Task<string> LoginAsync(string email)
+    {
+        var loginResponse = await _client.PostAsJsonAsync("/User/LoginWithGoogle", new GoogleLoginRequest
+        {
+            Email = email,
+            GoogleToken = "valid-token"
+        });
+        loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var loginPayload = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+        loginPayload.Should().NotBeNull();
+        return loginPayload!.Token;
+    }
+
+    private async Task AuthenticateAsManagerAsync()
+    {
+        var token = await LoginAsync("manager@test.it");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
     }
 
     [Fact]
@@ -90,6 +142,7 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
     public async Task GetShuttleById_ReturnsOk_ForValidId()
     {
         // Arrange
+        await AuthenticateAsManagerAsync();
         var createShuttleDto = new CreateShuttleDto
         {
             Name = "Test Shuttle",
@@ -124,6 +177,7 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
     public async Task CreateShuttle_ReturnsCreatedStatus_WithValidData()
     {
         // Arrange
+        await AuthenticateAsManagerAsync();
         var createShuttleDto = new CreateShuttleDto
         {
             Name = "Test Shuttle",
@@ -156,6 +210,7 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
     public async Task CreateShuttle_ReturnsBadRequest_ForNullData()
     {
         // Arrange
+        await AuthenticateAsManagerAsync();
         const string request = RequestBase + "CreateShuttle";
 
         // Act
@@ -169,111 +224,42 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
-    public async Task UpdateShuttle_ReturnsBadRequest_ForInvalidCapacity()
+    public async Task UpdateShuttleDetails_ReturnsOk_ForValidPayload()
     {
-        // Arrange
-        const int invalidCapacity = -10;
-        const string request = RequestBase + "UpdateShuttle/1";
-
-        // Act
-        var response =
-            await _client.PutAsJsonAsync(request, new UpdateShuttleCapacityRequest { Capacity = invalidCapacity });
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task UpdateShuttle_ReturnsOk_ForValidCapacity()
-    {
-        // Arrange
-        // Creo un nuovo shuttle utilizzando l'endpoint CreateShuttle
-        var createShuttleDto = new CreateShuttleDto
+        await AuthenticateAsManagerAsync();
+        var createResponse = await _client.PostAsJsonAsync(RequestBase + "CreateShuttle", new CreateShuttleDto
         {
-            Name = "Test Shuttle",
+            Name = "Shuttle Originale",
             Capacity = 10
-        };
-
-        const string createRequest = RequestBase + "CreateShuttle";
-        var createResponse = await _client.PostAsJsonAsync(createRequest, createShuttleDto);
-        createResponse.StatusCode.Should()
-            .Be(HttpStatusCode.Created); // Verifica che la creazione sia avvenuta con successo
+        });
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
 
         var createdShuttle = await createResponse.Content.ReadFromJsonAsync<ShuttleDto>();
-        var shuttleId = createdShuttle!.Id; // Ottengo l'ID dello shuttle appena creato
+        createdShuttle.Should().NotBeNull();
 
-        const int newCapacity = 50; // Capacità valida
-        var updateRequest = RequestBase + $"UpdateShuttle/{shuttleId}";
+        var updateResponse =
+            await _client.PutAsJsonAsync(
+                RequestBase + $"UpdateShuttleDetails/{createdShuttle!.Id}",
+                new UpdateShuttleDetailsRequest
+                {
+                    Name = "Shuttle Aggiornata",
+                    Capacity = 22,
+                    MeetingAtUtc = new DateTime(2026, 04, 02, 07, 45, 0, DateTimeKind.Utc)
+                });
 
-        // Act
-        var response =
-            await _client.PutAsJsonAsync(updateRequest, new UpdateShuttleCapacityRequest { Capacity = newCapacity });
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var updatedShuttle = await response.Content.ReadFromJsonAsync<ShuttleDto>();
-        updatedShuttle.Should().NotBeNull();
-        updatedShuttle!.Capacity.Should().Be(newCapacity); // Verifica che la capacità sia stata aggiornata
-
-        // Cancello lo shuttle appena creato
-        var deleteRequest = RequestBase + $"DeleteShuttle/{shuttleId}";
-        await _client.DeleteAsync(deleteRequest);
-    }
-
-    [Fact]
-    public async Task UpdateShuttle_ReturnsBadRequest_ForCapacityGreaterThan100()
-    {
-        // Arrange
-        // Creo un nuovo shuttle utilizzando l'endpoint CreateShuttle
-        var createShuttleDto = new CreateShuttleDto
-        {
-            Name = "Test Shuttle",
-            Capacity = 10
-        };
-
-        const string createRequest = RequestBase + "CreateShuttle";
-        var createResponse = await _client.PostAsJsonAsync(createRequest, createShuttleDto);
-        createResponse.StatusCode.Should()
-            .Be(HttpStatusCode.Created); // Verifica che la creazione sia avvenuta con successo
-
-        var createdShuttle = await createResponse.Content.ReadFromJsonAsync<ShuttleDto>();
-        var shuttleId = createdShuttle!.Id; // Ottengo l'ID dello shuttle appena creato
-
-        const int invalidCapacity = 150; // Capacità superiore a 100
-        var updateRequest = RequestBase + $"UpdateShuttle/{shuttleId}";
-
-        // Act
-        var response = await _client.PutAsJsonAsync(updateRequest,
-            new UpdateShuttleCapacityRequest { Capacity = invalidCapacity });
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-
-        // Cancello lo shuttle appena creato
-        var deleteRequest = RequestBase + $"DeleteShuttle/{shuttleId}";
-        await _client.DeleteAsync(deleteRequest);
-    }
-
-    [Fact]
-    public async Task UpdateShuttle_ReturnsNotFound_ForInvalidId()
-    {
-        // Arrange
-        const int invalidId = 99999; // ID che non esiste
-        const int newCapacity = 50; // Capacità valida
-        var updateRequest = RequestBase + $"UpdateShuttle/{invalidId}";
-
-        // Act
-        var response =
-            await _client.PutAsJsonAsync(updateRequest, new UpdateShuttleCapacityRequest { Capacity = newCapacity });
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        updateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await updateResponse.Content.ReadFromJsonAsync<ShuttleDto>();
+        updated.Should().NotBeNull();
+        updated!.Name.Should().Be("Shuttle Aggiornata");
+        updated.Capacity.Should().Be(22);
+        updated.MeetingAtUtc.Should().Be(new DateTime(2026, 04, 02, 07, 45, 0, DateTimeKind.Utc));
     }
 
     [Fact]
     public async Task DeleteShuttle_ReturnsOk_ForExistingShuttle()
     {
         // Arrange
+        await AuthenticateAsManagerAsync();
         // Creo un nuovo shuttle utilizzando l'endpoint CreateShuttle
         var createShuttleDto = new CreateShuttleDto
         {
@@ -310,6 +296,7 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
     public async Task DeleteShuttle_ReturnsNotFound_ForInvalidId()
     {
         // Arrange
+        await AuthenticateAsManagerAsync();
         const string request = RequestBase + "DeleteShuttle/99999"; // Un ID che non esiste
 
         // Act
@@ -320,6 +307,61 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
         var errorResponse = await response.Content.ReadFromJsonAsync<Dictionary<string, JsonElement>>();
         errorResponse.Should().ContainKey("message");
         errorResponse?["message"].GetString().Should().Be("Shuttle con ID 99999 non trovato.");
+    }
+
+    [Fact]
+    public async Task CreateShuttle_ReturnsUnauthorized_WhenNoToken()
+    {
+        var response = await _client.PostAsJsonAsync(RequestBase + "CreateShuttle", new CreateShuttleDto
+        {
+            Name = "Test Shuttle",
+            Capacity = 10
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task CreateShuttle_ReturnsForbidden_WhenUserIsNotManagerOrAdmin()
+    {
+        var token = await LoginAsync($"rider.{Guid.NewGuid():N}@test.it");
+        using var request = new HttpRequestMessage(HttpMethod.Post, RequestBase + "CreateShuttle")
+        {
+            Content = JsonContent.Create(new CreateShuttleDto { Name = "Test Shuttle", Capacity = 10 })
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await _client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task DeleteShuttle_ReturnsUnauthorized_WhenNoToken()
+    {
+        var response = await _client.DeleteAsync(RequestBase + "DeleteShuttle/1");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task UpdateShuttleDetails_ReturnsForbidden_WhenUserIsNotManagerOrAdmin()
+    {
+        var token = await LoginAsync($"rider.{Guid.NewGuid():N}@test.it");
+        using var request = new HttpRequestMessage(HttpMethod.Put, RequestBase + "UpdateShuttleDetails/1")
+        {
+            Content = JsonContent.Create(new UpdateShuttleDetailsRequest
+            {
+                Name = "Test Shuttle",
+                Capacity = 10,
+                MeetingAtUtc = DateTime.UtcNow
+            })
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await _client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]

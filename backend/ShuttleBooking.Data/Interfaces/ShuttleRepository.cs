@@ -8,7 +8,8 @@ public class ShuttleRepository(AppDbContext context) : IShuttleRepository
     public async Task<IEnumerable<Shuttle>> GetAllShuttlesAsync() =>
         await context.Shuttles
             .AsNoTracking()
-            .OrderBy(s => s.Name)
+            .OrderBy(s => s.MeetingAtUtc)
+            .ThenBy(s => s.Name)
             .ToListAsync();
 
     public async Task<Shuttle?> GetShuttleByIdAsync(int id) =>

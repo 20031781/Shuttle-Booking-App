@@ -96,6 +96,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 builder.Services.AddAutoMapper(_ => { }, typeof(ShuttleProfile).Assembly);
 builder.Services.Configure<RateLimitingOptions>(builder.Configuration.GetSection("RateLimiting"));
 builder.Services.Configure<AdminDashboardOptions>(builder.Configuration.GetSection("AdminDashboard"));
+builder.Services.Configure<ManagerDashboardOptions>(builder.Configuration.GetSection("ManagerDashboard"));
 builder.Services.Configure<PushNotificationsOptions>(builder.Configuration.GetSection("PushNotifications"));
 
 builder.Services.AddDbContext<AppDbContext>(options =>

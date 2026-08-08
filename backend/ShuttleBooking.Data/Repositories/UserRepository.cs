@@ -35,6 +35,15 @@ public class UserRepository(AppDbContext context) : IUserRepository
         return await context.Users.AnyAsync(u => u.Email.ToUpper() == normalizedEmail);
     }
 
+    public async Task<bool> ExistsByUsernameAsync(string username, int? excludingUserId = null)
+    {
+        var normalizedUsername = NormalizeUsername(username);
+        return await context.Users.AnyAsync(u =>
+            u.Username != null &&
+            u.Username.ToUpper() == normalizedUsername &&
+            (!excludingUserId.HasValue || u.Id != excludingUserId.Value));
+    }
+
     public async Task<User> UpdateAsync(User user)
     {
         user.Email = NormalizeEmail(user.Email).ToLowerInvariant();
@@ -44,4 +53,6 @@ public class UserRepository(AppDbContext context) : IUserRepository
     }
 
     private static string NormalizeEmail(string email) => email.Trim().ToUpperInvariant();
+
+    private static string NormalizeUsername(string username) => username.Trim().ToUpperInvariant();
 }

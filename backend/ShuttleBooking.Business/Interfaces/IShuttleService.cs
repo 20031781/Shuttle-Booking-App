@@ -28,12 +28,14 @@ public interface IShuttleService
     Task<ShuttleDto> CreateShuttleAsync(CreateShuttleDto shuttleDto);
 
     /// <summary>
-    ///     Aggiorna la capacità di uno shuttle.
+    ///     Aggiorna nome e capacità di uno shuttle.
     /// </summary>
     /// <param name="id">L'ID dello shuttle da aggiornare.</param>
-    /// <param name="newCapacity">La nuova capacità dello shuttle.</param>
-    /// <returns>Lo <see cref="ShuttleDto" /> aggiornato, se trovato; altrimenti, <c>null</c>.</returns>
-    Task<ShuttleDto?> UpdateShuttleCapacityAsync(int id, int newCapacity);
+    /// <param name="name">Il nuovo nome dello shuttle.</param>
+    /// <param name="capacity">La nuova capacità.</param>
+    /// <param name="meetingAtUtc">Data/ora ritrovo in UTC.</param>
+    /// <returns>Lo shuttle aggiornato, se trovato; altrimenti <c>null</c>.</returns>
+    Task<ShuttleDto?> UpdateShuttleDetailsAsync(int id, string name, int capacity, DateTime meetingAtUtc);
 
     /// <summary>
     ///     Elimina uno shuttle tramite ID.

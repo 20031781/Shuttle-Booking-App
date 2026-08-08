@@ -6,6 +6,7 @@ public class BookingDto
 {
     public int Id { get; init; }
     public int UserId { get; init; }
+    public string UserDisplayName { get; init; } = string.Empty;
     public string UserEmail { get; init; } = string.Empty;
     public int ShuttleId { get; init; }
     public string ShuttleName { get; init; } = string.Empty;
@@ -17,11 +18,9 @@ public class BookingDto
 
 public class CreateBookingRequest
 {
-    [Range(1, int.MaxValue)]
-    public int ShuttleId { get; init; }
+    [Range(1, int.MaxValue)] public int ShuttleId { get; init; }
 
-    [Required]
-    public DateTime Date { get; init; }
+    [Required] public DateTime Date { get; init; }
 }
 
 public class BookingActionResponse

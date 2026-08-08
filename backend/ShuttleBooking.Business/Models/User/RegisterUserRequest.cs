@@ -6,9 +6,9 @@ public class RegisterUserRequest
 {
     [Required] [EmailAddress] public required string Email { get; set; }
 
-    [Required] public required string FirstName { get; set; }
+    [StringLength(50, MinimumLength = 1)] public string? FirstName { get; set; }
 
-    [Required] public required string LastName { get; set; }
+    [StringLength(50, MinimumLength = 1)] public string? LastName { get; set; }
 
     [Required] public required string AuthProvider { get; init; }
 
@@ -18,9 +18,13 @@ public class RegisterUserRequest
 
     public string? Phone { get; set; }
 
-    [Required] public required string PhoneCountryCode { get; set; }
+    [StringLength(5, MinimumLength = 1)] public string? PhoneCountryCode { get; set; }
 
     public string? Address { get; set; }
 
-    [Required] public required string City { get; set; }
+    [StringLength(100, MinimumLength = 1)] public string? City { get; set; }
+
+    [StringLength(50, MinimumLength = 3)] public string? Username { get; set; }
+
+    [StringLength(100, MinimumLength = 1)] public string? Club { get; set; }
 }

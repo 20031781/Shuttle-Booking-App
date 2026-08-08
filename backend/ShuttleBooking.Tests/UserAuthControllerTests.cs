@@ -24,11 +24,22 @@ public class UserAuthControllerTests(CustomWebApplicationFactory factory) : ICla
         loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var loginPayload = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
         loginPayload.Should().NotBeNull();
+        loginPayload!.User.IsProfileCompleted.Should().BeFalse();
 
         using var profileRequest = new HttpRequestMessage(HttpMethod.Get, "/User/Me");
-        profileRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginPayload!.Token);
+        profileRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginPayload.Token);
         var meResponse = await _client.SendAsync(profileRequest);
         meResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var accessRequest = new HttpRequestMessage(HttpMethod.Get, "/User/Access");
+        accessRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginPayload.Token);
+        var accessResponse = await _client.SendAsync(accessRequest);
+        accessResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var accessPayload = await accessResponse.Content.ReadFromJsonAsync<UserAccessDto>();
+        accessPayload.Should().NotBeNull();
+        accessPayload!.IsAdmin.Should().BeFalse();
+        accessPayload.IsManager.Should().BeFalse();
 
         using var deviceTokenRequest = new HttpRequestMessage(HttpMethod.Post, "/User/DeviceToken");
         deviceTokenRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginPayload.Token);
@@ -60,6 +71,13 @@ public class UserAuthControllerTests(CustomWebApplicationFactory factory) : ICla
         refreshPayload.Should().NotBeNull();
         refreshPayload!.Token.Should().NotBeNullOrWhiteSpace();
         refreshPayload.RefreshToken.Should().NotBeNullOrWhiteSpace();
+        refreshPayload.RefreshToken.Should().NotBe(loginPayload.RefreshToken);
+
+        var oldRefreshAfterRotation = await _client.PostAsJsonAsync("/User/RefreshToken", new RefreshTokenRequest
+        {
+            RefreshToken = loginPayload.RefreshToken
+        });
+        oldRefreshAfterRotation.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
         using var logoutRequest = new HttpRequestMessage(HttpMethod.Post, "/User/Logout");
         logoutRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", refreshPayload.Token);
@@ -82,27 +100,82 @@ public class UserAuthControllerTests(CustomWebApplicationFactory factory) : ICla
         var registerResponse = await _client.PostAsJsonAsync("/User/register", new RegisterUserRequest
         {
             Email = email,
-            FirstName = "Utente",
-            LastName = "Password",
             AuthProvider = "App",
-            Password = password,
-            PhoneCountryCode = "+39",
-            City = "Roma"
+            Password = password
         });
         registerResponse.StatusCode.Should().Be(HttpStatusCode.Created);
 
-        var loginResponse = await _client.PostAsJsonAsync("/User/Login", new PasswordLoginRequest
-        {
-            Email = email,
-            Password = password
-        });
-        loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        var loginPayload = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+        var loginPayload = await registerResponse.Content.ReadFromJsonAsync<LoginResponse>();
         loginPayload.Should().NotBeNull();
         loginPayload!.Token.Should().NotBeNullOrWhiteSpace();
         loginPayload.RefreshToken.Should().NotBeNullOrWhiteSpace();
         loginPayload.User.Email.Should().Be(email);
         loginPayload.User.AuthProvider.Should().Be("App");
+        loginPayload.User.IsProfileCompleted.Should().BeFalse();
+
+        using var completeProfileRequest = new HttpRequestMessage(HttpMethod.Put, "/User/CompleteProfile");
+        completeProfileRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginPayload.Token);
+        completeProfileRequest.Content = JsonContent.Create(new CompleteUserProfileRequest
+        {
+            FirstName = "Lorenzo",
+            LastName = "Appetito",
+            Club = "Shuttle Club",
+            City = "Roma"
+        });
+
+        var completeProfileResponse = await _client.SendAsync(completeProfileRequest);
+        completeProfileResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var completedProfile = await completeProfileResponse.Content.ReadFromJsonAsync<UserDto>();
+        completedProfile.Should().NotBeNull();
+        completedProfile!.FirstName.Should().Be("Lorenzo");
+        completedProfile.LastName.Should().Be("Appetito");
+        completedProfile.Club.Should().Be("Shuttle Club");
+        completedProfile.City.Should().Be("Roma");
+        completedProfile.IsProfileCompleted.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AccessEndpoint_ReturnsAdminAndManagerFlags_FromConfiguredEmailLists()
+    {
+        var adminLogin = await _client.PostAsJsonAsync("/User/LoginWithGoogle", new GoogleLoginRequest
+        {
+            Email = "admin@test.it",
+            GoogleToken = "valid-token"
+        });
+        adminLogin.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var adminPayload = await adminLogin.Content.ReadFromJsonAsync<LoginResponse>();
+        adminPayload.Should().NotBeNull();
+
+        using var adminAccessRequest = new HttpRequestMessage(HttpMethod.Get, "/User/Access");
+        adminAccessRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", adminPayload!.Token);
+        var adminAccessResponse = await _client.SendAsync(adminAccessRequest);
+        adminAccessResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var adminAccess = await adminAccessResponse.Content.ReadFromJsonAsync<UserAccessDto>();
+        adminAccess.Should().NotBeNull();
+        adminAccess!.IsAdmin.Should().BeTrue();
+        adminAccess.IsManager.Should().BeFalse();
+
+        var managerLogin = await _client.PostAsJsonAsync("/User/LoginWithGoogle", new GoogleLoginRequest
+        {
+            Email = "manager@test.it",
+            GoogleToken = "valid-token"
+        });
+        managerLogin.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var managerPayload = await managerLogin.Content.ReadFromJsonAsync<LoginResponse>();
+        managerPayload.Should().NotBeNull();
+
+        using var managerAccessRequest = new HttpRequestMessage(HttpMethod.Get, "/User/Access");
+        managerAccessRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", managerPayload!.Token);
+        var managerAccessResponse = await _client.SendAsync(managerAccessRequest);
+        managerAccessResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var managerAccess = await managerAccessResponse.Content.ReadFromJsonAsync<UserAccessDto>();
+        managerAccess.Should().NotBeNull();
+        managerAccess!.IsAdmin.Should().BeFalse();
+        managerAccess.IsManager.Should().BeTrue();
     }
 }
