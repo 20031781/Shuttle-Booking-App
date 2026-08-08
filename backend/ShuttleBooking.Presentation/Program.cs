@@ -1,8 +1,11 @@
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -15,7 +18,6 @@ using ShuttleBooking.Data;
 using ShuttleBooking.Data.Interfaces;
 using ShuttleBooking.Data.Repositories;
 using ShuttleBooking.Presentation.MappingProfiles;
-using ShuttleBooking.Presentation.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -102,7 +104,47 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 });
 
 builder.Services.AddAutoMapper(_ => { }, typeof(ShuttleProfile).Assembly);
-builder.Services.Configure<RateLimitingOptions>(builder.Configuration.GetSection("RateLimiting"));
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.Headers["Retry-After"] = "60";
+        context.HttpContext.Response.ContentType = "application/json";
+
+        var errorResponse = new ErrorResponse
+        {
+            Message = "Troppe richieste. Per favore riprova più tardi.",
+            StatusCode = StatusCodes.Status429TooManyRequests,
+            ErrorCode = "RATE_LIMIT_EXCEEDED"
+        };
+        await context.HttpContext.Response.WriteAsync(JsonSerializer.Serialize(errorResponse), cancellationToken);
+    };
+
+    // Limite per IP client su una finestra scorrevole di un minuto - stesso comportamento
+    // del middleware custom che sostituisce, ma con eviction automatica delle partizioni
+    // inattive (il dizionario statico precedente cresceva senza mai liberare memoria).
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    {
+        var clientIp = GetClientIpAddress(httpContext);
+
+        // Risolto a runtime (non catturato alla registrazione): builder.Configuration non
+        // riflette ancora eventuali override applicati da WebApplicationFactory nei test,
+        // che vengono composti solo quando l'host è completamente costruito.
+        var maxRequestsPerMinute = httpContext.RequestServices.GetRequiredService<IConfiguration>()
+            .GetValue<int?>("RateLimiting:MaxRequestsPerMinute") ?? 60;
+
+        return RateLimitPartition.GetSlidingWindowLimiter(clientIp, _ => new SlidingWindowRateLimiterOptions
+        {
+            PermitLimit = maxRequestsPerMinute,
+            Window = TimeSpan.FromMinutes(1),
+            SegmentsPerWindow = 6,
+            QueueLimit = 0
+        });
+    });
+});
+
 builder.Services.Configure<AdminDashboardOptions>(builder.Configuration.GetSection("AdminDashboard"));
 builder.Services.Configure<ManagerDashboardOptions>(builder.Configuration.GetSection("ManagerDashboard"));
 builder.Services.Configure<PushNotificationsOptions>(builder.Configuration.GetSection("PushNotifications"));
@@ -144,7 +186,7 @@ builder.Services.AddHttpClient<IPushNotificationService, FirebasePushNotificatio
 var app = builder.Build();
 
 app.UseExceptionHandler("/error");
-app.UseRateLimiting();
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
@@ -162,6 +204,16 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.Run();
+
+static string GetClientIpAddress(HttpContext context)
+{
+    var ip = context.Connection.RemoteIpAddress?.ToString();
+
+    var forwardedIp = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+    if (!string.IsNullOrEmpty(forwardedIp)) ip = forwardedIp.Split(',')[0].Trim();
+
+    return string.IsNullOrWhiteSpace(ip) ? "unknown" : ip;
+}
 
 /// <summary>
 ///     Entry point dell'applicazione (utile per integrazione con WebApplicationFactory nei test).

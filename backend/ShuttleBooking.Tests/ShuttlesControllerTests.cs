@@ -12,6 +12,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ShuttleBooking.Business.DTOs;
+using ShuttleBooking.Business.Models;
 using ShuttleBooking.Business.Models.Push;
 using ShuttleBooking.Business.Models.User;
 using ShuttleBooking.Business.Services;
@@ -432,5 +433,30 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
         // richiesta anonima viene comunque bloccata prima ancora di scoprire che la
         // route non esiste.
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task ExceedingRateLimit_Returns429_WithRetryAfterAndErrorBody()
+    {
+        // Arrange: override puntuale a un limite bassissimo, il resto della suite gira a
+        // 1_000_000 req/min per non interferire con gli altri test.
+        var factory = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureAppConfiguration((_, configBuilder) =>
+                configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["RateLimiting:MaxRequestsPerMinute"] = "3"
+                })));
+        var client = factory.CreateClient();
+
+        HttpResponseMessage? lastResponse = null;
+        for (var i = 0; i < 5; i++) lastResponse = await client.GetAsync(RequestBase + "GetShuttles");
+
+        // Assert
+        lastResponse!.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+        lastResponse.Headers.RetryAfter.Should().NotBeNull();
+
+        var body = await lastResponse.Content.ReadFromJsonAsync<ErrorResponse>();
+        body.Should().NotBeNull();
+        body!.ErrorCode.Should().Be("RATE_LIMIT_EXCEEDED");
     }
 }
