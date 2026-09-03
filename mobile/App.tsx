@@ -74,6 +74,18 @@ function RootApp() {
     const {updateResult} = useUpdateCheck(updateJsonUrl);
     const isAuthenticated = sessionSnapshot.isAuthenticated;
 
+    // Come in Split Expenses, il backend viene controllato anche prima del
+    // login: in questo modo una API spenta è visibile nella schermata Google e
+    // non resta un fallimento apparentemente silenzioso.
+    useEffect(() => {
+        void checkApiReachability();
+        const intervalId = setInterval(() => {
+            void checkApiReachability(true);
+        }, 30_000);
+
+        return () => clearInterval(intervalId);
+    }, []);
+
     useEffect(() => {
         const unsubscribe = subscribeToSessionState(setSessionSnapshot);
         void initializeSessionOnAppStart()
@@ -121,6 +133,7 @@ function RootApp() {
                 return;
             }
 
+            void checkApiReachability(true);
             recoverAndSync('network');
         });
 
@@ -129,6 +142,7 @@ function RootApp() {
                 return;
             }
 
+            void checkApiReachability(true);
             recoverAndSync('appState');
         });
 

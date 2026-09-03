@@ -59,7 +59,7 @@ public class BookingRepository(AppDbContext context) : IBookingRepository
         var counts = await context.Bookings
             .AsNoTracking()
             .Where(b => !b.IsCanceled && shuttleIds.Contains(b.ShuttleId))
-            .GroupBy(b => new { b.ShuttleId, Date = b.Date.Date })
+            .GroupBy(b => new { b.ShuttleId, b.Date.Date })
             .Select(group => new { group.Key.ShuttleId, group.Key.Date, Count = group.Count() })
             .ToListAsync();
 

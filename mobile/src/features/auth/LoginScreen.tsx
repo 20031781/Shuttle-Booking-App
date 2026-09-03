@@ -1,8 +1,7 @@
 import {Ionicons} from '@expo/vector-icons';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
-import {useEffect, useRef, useState} from 'react';
+import {useRef, useState} from 'react';
 import {
+    ActivityIndicator,
     Keyboard,
     KeyboardAvoidingView,
     Platform,
@@ -20,14 +19,15 @@ import {
     type PasswordCredentials,
     registerWithPassword
 } from '@/api/authSession';
-import {apiConfig} from '@/api/config';
+import {ApiStatusBanner} from '@/components/ApiStatusBanner';
+import {useDialog} from '@/components/DialogProvider';
 import {t} from '@/i18n';
 import type {AppThemeColors} from '@/theme/colors';
 import {createGlobalStyles} from '@/theme/globalStyles';
 import {useAppTheme} from '@/theme/theme';
 import {getFriendlyErrorMessage} from '@/lib/errors';
-
-WebBrowser.maybeCompleteAuthSession();
+import googleSignInService from '@/services/google-signin.service';
+import {GoogleSignInConfigurationError} from '@/services/google-signin.types';
 
 function normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
@@ -41,64 +41,18 @@ export function LoginScreen({forcedMessage = null}: LoginScreenProps) {
     const {colors} = useAppTheme();
     const styles = createStyles(colors);
     const globalStyles = createGlobalStyles(colors);
+    const {showDialog} = useDialog();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isSignUp, setIsSignUp] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [pendingGoogleEmail, setPendingGoogleEmail] = useState<string | null>(null);
     const passwordInputRef = useRef<TextInput>(null);
     const lastAutoFillChange = useRef({
         email: {time: 0, jump: false},
         password: {time: 0, jump: false}
     });
-
-    const hasGoogleConfig = Boolean(
-        Platform.select({
-            android: apiConfig.googleAndroidClientId ?? apiConfig.googleExpoClientId,
-            ios: apiConfig.googleIosClientId ?? apiConfig.googleExpoClientId,
-            web: apiConfig.googleWebClientId,
-            default: undefined
-        })
-    );
-    const fallbackClientId = 'missing-google-client-id.apps.googleusercontent.com';
-    const resolvedAndroidClientId =
-        apiConfig.googleAndroidClientId ?? apiConfig.googleExpoClientId ?? fallbackClientId;
-    const resolvedIosClientId =
-        apiConfig.googleIosClientId ?? apiConfig.googleExpoClientId ?? fallbackClientId;
-    const resolvedWebClientId = apiConfig.googleWebClientId ?? fallbackClientId;
-
-    const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
-        clientId: apiConfig.googleExpoClientId ?? resolvedWebClientId,
-        androidClientId: resolvedAndroidClientId,
-        iosClientId: resolvedIosClientId,
-        webClientId: resolvedWebClientId,
-        scopes: ['openid', 'profile', 'email'],
-        selectAccount: true,
-        responseType: 'id_token'
-    });
-
-    useEffect(() => {
-        if (googleResponse?.type !== 'success') {
-            if (googleResponse?.type === 'error') {
-                setErrorMessage(t.auth.googleLoginFailed);
-            }
-            return;
-        }
-
-        const idToken = googleResponse.params.id_token;
-        if (!idToken || !pendingGoogleEmail) {
-            setErrorMessage(t.auth.googleTokenMissingInResponse);
-            return;
-        }
-
-        setSubmitting(true);
-        setErrorMessage(null);
-
-        void loginWithGoogle(pendingGoogleEmail, idToken)
-            .catch(error => setErrorMessage(getFriendlyErrorMessage(error, t.auth.loginFailed)))
-            .finally(() => setSubmitting(false));
-    }, [googleResponse, pendingGoogleEmail]);
 
     function handleAutofillAwareChange(field: 'email' | 'password', value: string) {
         const previousValue = field === 'email' ? email : password;
@@ -132,38 +86,54 @@ export function LoginScreen({forcedMessage = null}: LoginScreenProps) {
         try {
             await action({email: normalizedEmail, password});
         } catch (error) {
-            setErrorMessage(getFriendlyErrorMessage(error, t.auth.loginFailed));
+            const message = getFriendlyErrorMessage(error, t.auth.loginFailed);
+            setErrorMessage(message);
+            showDialog({title: t.common.error, message});
         } finally {
             setSubmitting(false);
         }
     }
 
-    async function handleGoogleLogin() {
-        if (!hasGoogleConfig) {
+    async function handleGoogleLogin(forceAccountPicker = false) {
+        if (submitting || isGoogleLoading) {
+            return;
+        }
+
+        if (!googleSignInService.isAvailable) {
             setErrorMessage(t.auth.googleConfigMissing);
             return;
         }
 
-        const normalizedEmail = normalizeEmail(email);
-        if (!normalizedEmail) {
-            setErrorMessage(t.auth.emailRequiredForGoogle);
-            return;
-        }
-
-        if (!googleRequest) {
-            setErrorMessage(t.auth.googleUnavailable);
-            return;
-        }
-
-        setPendingGoogleEmail(normalizedEmail);
+        Keyboard.dismiss();
+        setIsGoogleLoading(true);
         setErrorMessage(null);
-        await promptGoogleAsync();
+        try {
+            const idToken = await googleSignInService.signIn({forceAccountPicker});
+            // Annullare il selettore Google è un'uscita intenzionale, non un errore.
+            if (!idToken) {
+                return;
+            }
+
+            await loginWithGoogle(idToken);
+        } catch (error) {
+            const fallbackMessage = error instanceof GoogleSignInConfigurationError
+                ? t.auth.googleConfigMissing
+                : t.auth.googleLoginFailed;
+            const message = getFriendlyErrorMessage(error, fallbackMessage);
+            setErrorMessage(message);
+            showDialog({title: t.common.error, message});
+        } finally {
+            setIsGoogleLoading(false);
+        }
     }
+
+    const isBusy = submitting || isGoogleLoading;
 
     return <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+            <ApiStatusBanner/>
             <View style={styles.hero}>
                 <Text style={styles.heroBadge}>{t.auth.badge}</Text>
                 <Text style={styles.heroTitle}>{t.auth.title}</Text>
@@ -218,31 +188,55 @@ export function LoginScreen({forcedMessage = null}: LoginScreenProps) {
 
                 <Pressable
                     accessibilityRole="button"
-                    disabled={submitting}
+                    disabled={isBusy}
                     onPress={() => submitWithPassword(isSignUp ? registerWithPassword : loginWithPassword)}
-                    style={[globalStyles.primaryButton, styles.primaryAction, submitting && styles.disabledAction]}>
+                    style={[globalStyles.primaryButton, styles.primaryAction, isBusy && styles.disabledAction]}>
                     <Text style={globalStyles.primaryButtonText}>
                         {submitting ? t.auth.inProgress : isSignUp ? t.auth.signUp : t.auth.signIn}
                     </Text>
                 </Pressable>
 
-                <Pressable
-                    accessibilityRole="button"
-                    disabled={submitting}
-                    onPress={handleGoogleLogin}
-                    style={[styles.googleButton, submitting && styles.disabledAction]}>
-                    <Ionicons name="logo-google" size={18} color={colors.text}/>
-                    <Text style={styles.googleButtonText}>{t.auth.googleButton}</Text>
-                </Pressable>
+                {googleSignInService.isAvailable ? <>
+                    <View style={styles.dividerRow}>
+                        <View style={styles.dividerLine}/>
+                        <Text style={styles.dividerText}>{t.auth.orDivider}</Text>
+                        <View style={styles.dividerLine}/>
+                    </View>
+
+                    <Pressable
+                        accessibilityRole="button"
+                        disabled={isBusy}
+                        onPress={() => void handleGoogleLogin()}
+                        style={[globalStyles.outlineButton, styles.googleButton, isBusy && styles.disabledAction]}>
+                        {isGoogleLoading
+                            ? <ActivityIndicator color={colors.primary}/>
+                            : <>
+                                <Ionicons name="logo-google" size={18} color={colors.text}/>
+                                <Text style={[globalStyles.outlineButtonText, styles.googleButtonText]}>
+                                    {t.auth.googleButton}
+                                </Text>
+                            </>}
+                    </Pressable>
+
+                    <Pressable
+                        accessibilityRole="button"
+                        disabled={isBusy}
+                        onPress={() => void handleGoogleLogin(true)}
+                        style={styles.googleSwitchAccountButton}>
+                        <Text style={[styles.googleSwitchAccountText, isBusy && styles.disabledAction]}>
+                            {t.auth.googleUseAnotherAccount}
+                        </Text>
+                    </Pressable>
+                </> : null}
 
                 <Pressable
                     accessibilityRole="button"
-                    disabled={submitting}
+                    disabled={isBusy}
                     onPress={() => {
                         setIsSignUp(current => !current);
                         setErrorMessage(null);
                     }}
-                    style={styles.switchModeButton}>
+                    style={[styles.switchModeButton, isBusy && styles.disabledAction]}>
                     <Text style={styles.switchModeText}>
                         {isSignUp ? t.auth.switchToSignIn : t.auth.switchToSignUp}
                     </Text>
@@ -318,19 +312,38 @@ const createStyles = (colors: AppThemeColors) =>
             justifyContent: 'center'
         },
         googleButton: {
-            minHeight: 44,
-            borderWidth: 1,
-            borderColor: colors.borderStrong,
-            borderRadius: 12,
+            alignSelf: 'stretch',
             alignItems: 'center',
             justifyContent: 'center',
             flexDirection: 'row',
-            gap: 8,
-            backgroundColor: colors.surfaceSecondary
+            gap: 8
         },
         googleButtonText: {
-            color: colors.text,
             fontWeight: '600'
+        },
+        dividerRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            marginTop: 2
+        },
+        dividerLine: {
+            flex: 1,
+            height: StyleSheet.hairlineWidth,
+            backgroundColor: colors.border
+        },
+        dividerText: {
+            color: colors.subtleText,
+            fontSize: 12
+        },
+        googleSwitchAccountButton: {
+            alignItems: 'center',
+            paddingVertical: 2
+        },
+        googleSwitchAccountText: {
+            color: colors.subtleText,
+            fontSize: 12,
+            textDecorationLine: 'underline'
         },
         switchModeButton: {
             alignItems: 'center',

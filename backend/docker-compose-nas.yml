@@ -32,6 +32,10 @@ services:
       - Jwt__Audience=ShuttleBookingApp
       - Jwt__ExpiryInDays=1
       - Jwt__RefreshExpiryInDays=30
+      - GoogleAuth__ClientId=${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in the deploy environment (see backend/.env.example)}
+      - Resend__ApiKey=${RESEND_API_KEY:?Set RESEND_API_KEY in the deploy environment (see backend/.env.example)}
+      - Resend__FromAddress=${RESEND_FROM_ADDRESS:?Set RESEND_FROM_ADDRESS in the deploy environment (see backend/.env.example)}
+      - Email__LogoUrl=${EMAIL_LOGO_URL:-}
     ports:
       - "5100:8080"
       - "5101:8081"

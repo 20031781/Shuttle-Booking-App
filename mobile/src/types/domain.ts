@@ -36,6 +36,7 @@ export type Booking = {
     shuttleId: string;
     shuttleName: string;
     date: string;
+    meetingAtUtc?: string;
     status: BookingStatus;
     seatsRemaining?: number;
 };

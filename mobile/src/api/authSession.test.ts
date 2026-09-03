@@ -210,4 +210,19 @@ describe('authSession recovery', () => {
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
+
+    it("invia al backend Google soltanto l'id token", async () => {
+        fetchMock.mockResolvedValueOnce(createJsonResponse(createRefreshPayload(), 200));
+        const authSession = await loadAuthSessionModule();
+
+        await authSession.loginWithGoogle('google-id-token');
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            'http://localhost:5000/User/LoginWithGoogle',
+            expect.objectContaining({
+                method: 'POST',
+                body: JSON.stringify({idToken: 'google-id-token'}),
+            }),
+        );
+    });
 });

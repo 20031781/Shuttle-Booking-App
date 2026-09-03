@@ -33,6 +33,7 @@ export const bookingApiSchema = z.object({
     shuttleId: z.number(),
     shuttleName: z.string(),
     date: z.string(),
+    meetingAtUtc: z.string().optional(),
     createdAt: z.string(),
     isCanceled: z.boolean(),
     canceledAt: z.string().nullable()

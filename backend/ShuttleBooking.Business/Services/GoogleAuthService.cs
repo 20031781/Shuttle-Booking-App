@@ -1,73 +1,35 @@
-using System.Net.Http.Json;
-using System.Text.Json.Serialization;
+using Google.Apis.Auth;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 
 namespace ShuttleBooking.Business.Services;
 
-public class GoogleAuthService(
-    HttpClient httpClient,
-    IConfiguration configuration,
-    ILogger<GoogleAuthService> logger) : IGoogleAuthService
+/// <summary>
+///     Valida localmente gli ID token Google, inclusi firma, issuer, scadenza e
+///     audience. Non usa l'endpoint tokeninfo e non si fida di dati identitari
+///     forniti separatamente dall'app client.
+/// </summary>
+public sealed class GoogleAuthService(IConfiguration configuration) : IGoogleAuthService
 {
-    public async Task<bool> ValidateTokenAsync(string token, string email)
+    public async Task<GoogleIdentity> ValidateIdTokenAsync(string idToken)
     {
-        try
-        {
-            var response = await httpClient.GetFromJsonAsync<GoogleTokenInfo>(
-                $"https://oauth2.googleapis.com/tokeninfo?id_token={token}");
+        if (string.IsNullOrWhiteSpace(idToken) || idToken.Length > 20_000)
+            throw new InvalidOperationException("ID token Google non valido.");
 
-            if (response == null || string.IsNullOrWhiteSpace(response.Email)) return false;
+        var audiences = GoogleAudienceConfiguration.GetAudiences(configuration);
+        if (audiences.Count == 0)
+            throw new InvalidOperationException("Nessun Google OAuth client ID configurato.");
 
-            if (!string.Equals(response.Email, email, StringComparison.OrdinalIgnoreCase)) return false;
+        var payload = await GoogleJsonWebSignature.ValidateAsync(idToken,
+            new GoogleJsonWebSignature.ValidationSettings
+            {
+                Audience = audiences
+            });
 
-            if (!string.Equals(response.EmailVerified, bool.TrueString, StringComparison.OrdinalIgnoreCase))
-                return false;
-
-            if (IsTokenExpired(response.ExpiresAtUnix)) return false;
-
-            var expectedAudiences = new HashSet<string>(StringComparer.Ordinal);
-            var singleAudience = configuration["GoogleAuth:ClientId"];
-            if (!string.IsNullOrWhiteSpace(singleAudience)) expectedAudiences.Add(singleAudience.Trim());
-
-            var configuredAudiences = configuration.GetSection("GoogleAuth:ClientIds").Get<string[]>();
-            if (configuredAudiences != null)
-                foreach (var audience in configuredAudiences.Where(value => !string.IsNullOrWhiteSpace(value)))
-                    expectedAudiences.Add(audience.Trim());
-
-            if (expectedAudiences.Count > 0 &&
-                (string.IsNullOrWhiteSpace(response.Audience) || !expectedAudiences.Contains(response.Audience)))
-                return false;
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Validazione token Google non riuscita");
-            return false;
-        }
-    }
-
-    private static bool IsTokenExpired(string? expiresAtUnix)
-    {
-        if (!long.TryParse(expiresAtUnix, out var expirationValue)) return true;
-
-        var expiration = DateTimeOffset.FromUnixTimeSeconds(expirationValue);
-        return expiration <= DateTimeOffset.UtcNow;
-    }
-
-    private sealed class GoogleTokenInfo
-    {
-        [JsonPropertyName("email")]
-        public string? Email { get; init; }
-
-        [JsonPropertyName("email_verified")]
-        public string? EmailVerified { get; init; }
-
-        [JsonPropertyName("aud")]
-        public string? Audience { get; init; }
-
-        [JsonPropertyName("exp")]
-        public string? ExpiresAtUnix { get; init; }
+        return new GoogleIdentity(
+            payload.Subject ?? string.Empty,
+            payload.Email ?? string.Empty,
+            payload.Name,
+            payload.Picture,
+            payload.EmailVerified);
     }
 }

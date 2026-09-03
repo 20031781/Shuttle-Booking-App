@@ -67,4 +67,14 @@ describe('appPreferences', () => {
 
         await expect(second.loadThemePreference()).resolves.toBe('system');
     });
+
+    it('persiste le modalità di anteprima degli aggiornamenti', async () => {
+        const first = await loadModule();
+        await expect(first.loadUpdatePreviewMode()).resolves.toBe('none');
+
+        await first.saveUpdatePreviewMode('required');
+        const second = await loadModule();
+
+        await expect(second.loadUpdatePreviewMode()).resolves.toBe('required');
+    });
 });

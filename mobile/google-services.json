@@ -1,26 +1,36 @@
 {
   "project_info": {
-    "project_number": "952451758708",
-    "project_id": "shuttlebooking-108ef",
-    "storage_bucket": "shuttlebooking-108ef.firebasestorage.app"
+    "project_number": "550493541319",
+    "project_id": "shuttlebooking-507419",
+    "storage_bucket": "shuttlebooking-507419.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:952451758708:android:98eee96f7fe5f1a785ef21",
+        "mobilesdk_app_id": "1:550493541319:android:eb01ef90c1f68b020c7fe2",
         "android_client_info": {
           "package_name": "com.shuttlebooking.com"
         }
       },
-      "oauth_client": [ ],
+      "oauth_client": [
+        {
+          "client_id": "550493541319-4991uh168djfo4ocnpros00cdn085l4v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyB6sYFDJ-pptUAwIAuy-BE0xS8_M3pldgw"
+          "current_key": "AIzaSyBnedw5Ab33Rn9C5x56mxjiv9I6VOO8cRo"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [ ]
+          "other_platform_oauth_client": [
+            {
+              "client_id": "550493541319-4991uh168djfo4ocnpros00cdn085l4v.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

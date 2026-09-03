@@ -2,6 +2,7 @@ import type {PropsWithChildren} from 'react';
 import {StyleSheet, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
+import {ApiStatusBanner} from '@/components/ApiStatusBanner';
 import type {AppThemeColors} from '@/theme/colors';
 import {useAppTheme} from '@/theme/theme';
 
@@ -14,7 +15,10 @@ export function PageContainer({children}: PropsWithChildren) {
             <View pointerEvents="none" style={styles.auroraGlowTop}/>
             <View pointerEvents="none" style={styles.auroraGlowBottom}/>
         </> : null}
-        <View style={styles.content}>{children}</View>
+        <View style={styles.content}>
+            <ApiStatusBanner/>
+            {children}
+        </View>
     </SafeAreaView>;
 }
 

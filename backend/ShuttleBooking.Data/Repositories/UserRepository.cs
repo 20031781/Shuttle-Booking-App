@@ -14,6 +14,12 @@ public class UserRepository(AppDbContext context) : IUserRepository
             .FirstOrDefaultAsync(u => u.Email.ToUpper() == normalizedEmail);
     }
 
+    public async Task<User?> GetByGoogleIdAsync(string googleId)
+    {
+        var normalizedGoogleId = googleId.Trim();
+        return await context.Users.FirstOrDefaultAsync(user => user.GoogleId == normalizedGoogleId);
+    }
+
     public async Task<User?> GetByRefreshTokenHashAsync(string refreshTokenHash) =>
         await context.Users
             .FirstOrDefaultAsync(u => u.RefreshTokenHash == refreshTokenHash);
@@ -42,6 +48,19 @@ public class UserRepository(AppDbContext context) : IUserRepository
             u.Username != null &&
             u.Username.ToUpper() == normalizedUsername &&
             (!excludingUserId.HasValue || u.Id != excludingUserId.Value));
+    }
+
+    public async Task<User> LinkGoogleAccountAsync(int userId, string googleId, string? profilePicture)
+    {
+        var user = await context.Users.FindAsync(userId)
+                   ?? throw new KeyNotFoundException($"Utente con ID {userId} non trovato.");
+
+        user.GoogleId = googleId.Trim();
+        if (!string.IsNullOrWhiteSpace(profilePicture) && profilePicture.Trim().Length <= 255)
+            user.ProfilePicture = profilePicture.Trim();
+
+        await context.SaveChangesAsync();
+        return user;
     }
 
     public async Task<User> UpdateAsync(User user)

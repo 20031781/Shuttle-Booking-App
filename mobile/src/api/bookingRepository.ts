@@ -28,6 +28,7 @@ function mapApiBooking(dto: BookingApiDto, seatsRemaining?: number): Booking {
         shuttleId: String(dto.shuttleId),
         shuttleName: dto.shuttleName,
         date: dto.date,
+        meetingAtUtc: dto.meetingAtUtc,
         status: mapStatus(dto.isCanceled),
         seatsRemaining
     };
@@ -85,6 +86,7 @@ export class StaticBookingRepository implements BookingRepository {
             shuttleId,
             shuttleName: `${t.bookings.shuttleFallbackName} ${shuttleId}`,
             date: date.toISOString(),
+            meetingAtUtc: date.toISOString(),
             status: 'active',
             seatsRemaining: Math.max(0, 5 - staticBookings.filter(item => item.status === 'active').length)
         };

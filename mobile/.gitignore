@@ -7,6 +7,14 @@ android/
 ios/
 .env
 .env.*
+!.env.example
+
+# Firebase/Google service credentials
+google-services.json
+credentials.json
+credentials/
+android/keystore.properties
+GoogleService-Info.plist
 .idea/
 .vs/
 *.DotSettings.user

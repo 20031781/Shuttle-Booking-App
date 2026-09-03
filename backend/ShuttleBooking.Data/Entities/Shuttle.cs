@@ -10,14 +10,11 @@ public class Shuttle
     [StringLength(100, MinimumLength = 1)]
     public string Name { get; set; } = string.Empty;
 
-    [Range(1, 100)]
-    public int Capacity { get; set; }
+    [Range(1, 100)] public int Capacity { get; set; }
 
-    [Required]
-    public DateTime MeetingAtUtc { get; set; }
+    [Required] public DateTime MeetingAtUtc { get; set; }
 
-    [Timestamp]
-    public byte[] RowVersion { get; set; } = [];
+    [Timestamp] public byte[] RowVersion { get; set; } = [];
 
     public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
 }

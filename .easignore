@@ -1,0 +1,17 @@
+# EAS resolves this monorepo from the Git root. Keep only the mobile project
+# source and manifests needed by the Expo build.
+backend/
+mobile/node_modules/
+mobile/android/
+mobile/ios/
+mobile/.expo/
+mobile/.expo-shared/
+mobile/dist/
+mobile/web-build/
+mobile/coverage/
+mobile/*.apk
+mobile/*.aab
+mobile/*.log
+mobile/google-services.json
+mobile/GoogleService-Info.plist
+.git/

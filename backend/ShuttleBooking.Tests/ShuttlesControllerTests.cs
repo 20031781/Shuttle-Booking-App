@@ -25,6 +25,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
     private readonly string _databaseName = $"ShuttleBookingTests_{Guid.NewGuid()}";
 
     public TestPushNotificationService PushNotificationService { get; } = new();
+    public TestEmailSender EmailSender { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
         builder
@@ -34,7 +35,10 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 {
                     ["RateLimiting:MaxRequestsPerMinute"] = "1000000",
                     ["AdminDashboard:AllowedEmails:0"] = "admin@test.it",
-                    ["ManagerDashboard:AllowedEmails:0"] = "manager@test.it"
+                    ["ManagerDashboard:AllowedEmails:0"] = "manager@test.it",
+                    ["GoogleAuth:ClientId"] = "test-google-client-id.apps.googleusercontent.com",
+                    ["Resend:ApiKey"] = "re_test_key",
+                    ["Resend:FromAddress"] = "ShuttleBooking <no-reply@example.test>"
                 });
             })
             .ConfigureServices(services =>
@@ -43,17 +47,35 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
                 services.RemoveAll<AppDbContext>();
                 services.RemoveAll<IGoogleAuthService>();
+                services.RemoveAll<IEmailSender>();
                 services.RemoveAll<IPushNotificationService>();
 
                 services.AddDbContext<AppDbContext>(options => { options.UseInMemoryDatabase(_databaseName); });
                 services.AddSingleton<IGoogleAuthService, TestGoogleAuthService>();
+                services.AddSingleton<IEmailSender>(EmailSender);
                 services.AddSingleton<IPushNotificationService>(PushNotificationService);
             });
 }
 
 public sealed class TestGoogleAuthService : IGoogleAuthService
 {
-    public Task<bool> ValidateTokenAsync(string token, string email) => Task.FromResult(true);
+    private const string TokenPrefix = "test-google-id-token:";
+
+    public Task<GoogleIdentity> ValidateIdTokenAsync(string idToken)
+    {
+        if (!idToken.StartsWith(TokenPrefix, StringComparison.Ordinal))
+            throw new InvalidOperationException("Test ID token non valido.");
+
+        var email = idToken[TokenPrefix.Length..];
+        return Task.FromResult(new GoogleIdentity(
+            $"test-google-subject:{email}",
+            email,
+            "Test Google User",
+            "https://example.test/google-avatar.png",
+            true));
+    }
+
+    public static string CreateIdToken(string email) => $"{TokenPrefix}{email}";
 }
 
 public sealed class TestPushNotificationService : IPushNotificationService
@@ -79,6 +101,17 @@ public sealed class TestPushNotificationService : IPushNotificationService
     }
 }
 
+public sealed class TestEmailSender : IEmailSender
+{
+    public ConcurrentBag<(string ToEmail, string Subject, string HtmlBody)> Calls { get; } = new();
+
+    public Task SendAsync(string toEmail, string subject, string htmlBody)
+    {
+        Calls.Add((toEmail, subject, htmlBody));
+        return Task.CompletedTask;
+    }
+}
+
 public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
 {
     private const string RequestBase = "/Shuttles/";
@@ -96,14 +129,13 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
     {
         var loginResponse = await _client.PostAsJsonAsync("/User/LoginWithGoogle", new GoogleLoginRequest
         {
-            Email = email,
-            GoogleToken = "valid-token"
+            IdToken = TestGoogleAuthService.CreateIdToken(email)
         });
         loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var loginPayload = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
         loginPayload.Should().NotBeNull();
-        return loginPayload!.Token;
+        return loginPayload.Token;
     }
 
     private async Task AuthenticateAsManagerAsync()
@@ -199,7 +231,7 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var shuttleResult = await response.Content.ReadFromJsonAsync<ShuttleDto>();
         shuttleResult.Should().NotBeNull();
-        shuttleResult!.Id.Should().Be(shuttleId); // Assicurati che l'ID corrisponda
+        shuttleResult.Id.Should().Be(shuttleId); // Assicurati che l'ID corrisponda
         shuttleResult.Name.Should().Be(createShuttleDto.Name); // Verifica il nome
 
         // Cancello lo shuttle appena creato
@@ -232,7 +264,7 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
 
         var createdShuttle = await response.Content.ReadFromJsonAsync<ShuttleDto>();
         createdShuttle.Should().NotBeNull();
-        createdShuttle!.Name.Should().Be(createShuttleDto.Name);
+        createdShuttle.Name.Should().Be(createShuttleDto.Name);
         createdShuttle.Capacity.Should().Be(createShuttleDto.Capacity);
 
         // Cancello lo shuttle appena creato
@@ -254,7 +286,7 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var errorResponse = await response.Content.ReadFromJsonAsync<Dictionary<string, JsonElement>>();
         errorResponse.Should().NotBeNull();
-        errorResponse!["message"].GetString().Should().Be("Dati dello shuttle nulli.");
+        errorResponse["message"].GetString().Should().Be("Dati dello shuttle nulli.");
     }
 
     [Fact]
@@ -273,7 +305,7 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
 
         var updateResponse =
             await _client.PutAsJsonAsync(
-                RequestBase + $"UpdateShuttleDetails/{createdShuttle!.Id}",
+                RequestBase + $"UpdateShuttleDetails/{createdShuttle.Id}",
                 new UpdateShuttleDetailsRequest
                 {
                     Name = "Shuttle Aggiornata",
@@ -284,7 +316,7 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
         updateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var updated = await updateResponse.Content.ReadFromJsonAsync<ShuttleDto>();
         updated.Should().NotBeNull();
-        updated!.Name.Should().Be("Shuttle Aggiornata");
+        updated.Name.Should().Be("Shuttle Aggiornata");
         updated.Capacity.Should().Be(22);
         updated.MeetingAtUtc.Should().Be(new DateTime(2026, 04, 02, 07, 45, 0, DateTimeKind.Utc));
     }
@@ -420,7 +452,13 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
     {
         // Arrange
         // Ensure the environment is set to Production for this test
-        var factory = _factory.WithWebHostBuilder(builder => { builder.UseEnvironment("Production"); });
+        var factory = _factory.WithWebHostBuilder(builder => builder
+            .UseEnvironment("Production")
+            .ConfigureAppConfiguration((_, configurationBuilder) =>
+                configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["GoogleAuth:ClientId"] = "test-google-client-id.apps.googleusercontent.com"
+                })));
         var client = factory.CreateClient();
         const string request = "/swagger/v1/swagger.json";
 
@@ -433,6 +471,24 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
         // richiesta anonima viene comunque bloccata prima ancora di scoprire che la
         // route non esiste.
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public void ProductionStartup_RejectsGooglePlaceholders()
+    {
+        using var factory = _factory.WithWebHostBuilder(builder =>
+            builder
+                .UseEnvironment("Production")
+                .ConfigureAppConfiguration((_, configuration) =>
+                    configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["GoogleAuth:ClientId"] = "CHANGE_ME_WEB_OAUTH_CLIENT_ID.apps.googleusercontent.com"
+                    })));
+
+        var action = () => factory.CreateClient();
+
+        action.Should().Throw<InvalidOperationException>()
+            .WithMessage("*GoogleAuth richiede almeno un OAuth client ID reale*");
     }
 
     [Fact]
@@ -457,6 +513,6 @@ public class ProgramTest : IClassFixture<CustomWebApplicationFactory>
 
         var body = await lastResponse.Content.ReadFromJsonAsync<ErrorResponse>();
         body.Should().NotBeNull();
-        body!.ErrorCode.Should().Be("RATE_LIMIT_EXCEEDED");
+        body.ErrorCode.Should().Be("RATE_LIMIT_EXCEEDED");
     }
 }

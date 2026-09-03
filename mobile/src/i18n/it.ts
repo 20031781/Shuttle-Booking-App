@@ -1,7 +1,8 @@
 export const it = {
     common: {
         ok: 'OK',
-        cancel: 'Annulla'
+        cancel: 'Annulla',
+        error: 'Errore'
     },
     app: {
         sections: {
@@ -27,11 +28,10 @@ export const it = {
         switchToSignIn: 'Hai già un account? Accedi',
         inProgress: 'Operazione in corso...',
         googleButton: 'Continua con Google',
+        googleUseAnotherAccount: 'Usa un altro account',
+        orDivider: 'oppure',
         googleConfigMissing:
-            'Configurazione Google OAuth mancante. Su Android imposta EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID (oppure EXPO_PUBLIC_GOOGLE_CLIENT_ID_EXPO).',
-        googleUnavailable: 'Login Google non disponibile al momento.',
-        emailRequiredForGoogle: 'Inserisci prima la tua email per il login Google.',
-        googleTokenMissingInResponse: 'Google non ha restituito un token id valido.',
+            'Google Sign-In non è configurato per questa build.',
         googleLoginFailed: 'Login Google non riuscito.',
         loginFailed: 'Login non riuscito.',
         reloginRequired: 'Sessione non valida o scaduta. Effettua di nuovo il login.',
@@ -271,9 +271,9 @@ export const it = {
         },
         items: {
             bookingConfirmationsTitle: 'Conferma prenotazione',
-            bookingConfirmationsSubtitle: 'Notifica quando la prenotazione è confermata.',
+            bookingConfirmationsSubtitle: 'Notifica push ed email quando la prenotazione è confermata.',
             bookingCancellationsTitle: 'Annullamento prenotazione',
-            bookingCancellationsSubtitle: 'Notifica quando una prenotazione viene annullata.',
+            bookingCancellationsSubtitle: 'Notifica push ed email quando una prenotazione viene annullata.',
             shuttleReminderOneHourTitle: 'Promemoria 1 ora prima',
             shuttleReminderOneHourSubtitle: 'Avviso un’ora prima del ritrovo.',
             shuttleReminderDayBeforeTitle: 'Promemoria giorno prima',
@@ -291,6 +291,11 @@ export const it = {
         invalidResponse: (path: string) =>
             `Risposta del server non valida per ${path}. Aggiorna l'app o riprova più tardi.`,
         offlineBadge: 'Offline',
+        offlineTitle: 'Connessione assente',
+        offlineMessage: 'Controlla la connessione Internet e riprova.',
+        unavailableTitle: 'Server non raggiungibile',
+        unavailableMessage: 'Le API non rispondono. Riprova tra poco.',
+        retry: 'Riprova',
         networkUnavailable: (baseUrl: string) =>
             `Server non raggiungibile (${baseUrl}). Verifica URL API e rete: su Android emulatore usa 10.0.2.2, su device usa l'IP LAN del tuo PC.`
     },

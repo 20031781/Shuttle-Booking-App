@@ -11,6 +11,13 @@ public class BookingDto
     public int ShuttleId { get; init; }
     public string ShuttleName { get; init; } = string.Empty;
     public DateTime Date { get; init; }
+
+    /// <summary>
+    ///     Data e ora locale dello shuttle espresse come istante UTC.
+    ///     <see cref="Date" /> resta la data logica usata per i vincoli di prenotazione.
+    /// </summary>
+    public DateTime MeetingAtUtc { get; init; }
+
     public DateTime CreatedAt { get; init; }
     public bool IsCanceled { get; init; }
     public DateTime? CanceledAt { get; init; }

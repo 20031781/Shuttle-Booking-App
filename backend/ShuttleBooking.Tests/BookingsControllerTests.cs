@@ -33,7 +33,7 @@ public class BookingsControllerTests(CustomWebApplicationFactory factory) : ICla
         createBookingResponse.StatusCode.Should().Be(HttpStatusCode.Created);
         var bookingResult = await createBookingResponse.Content.ReadFromJsonAsync<BookingActionResponse>();
         bookingResult.Should().NotBeNull();
-        bookingResult!.SeatsRemaining.Should().Be(0);
+        bookingResult.SeatsRemaining.Should().Be(0);
         bookingResult.Booking.IsCanceled.Should().BeFalse();
         bookingResult.IsIdempotentReplay.Should().BeFalse();
 
@@ -41,7 +41,7 @@ public class BookingsControllerTests(CustomWebApplicationFactory factory) : ICla
             HttpMethod.Get, $"/Shuttles/GetShuttles?date={bookingDate:O}", null, token);
         var shuttlesResponse = await shuttlesHttpResponse.Content.ReadFromJsonAsync<List<ShuttleDto>>();
         shuttlesResponse.Should().NotBeNull();
-        var updatedShuttle = shuttlesResponse!.Single(s => s.Id == shuttle.Id);
+        var updatedShuttle = shuttlesResponse.Single(s => s.Id == shuttle.Id);
         updatedShuttle.AvailableSeats.Should().Be(0);
     }
 
@@ -101,14 +101,14 @@ public class BookingsControllerTests(CustomWebApplicationFactory factory) : ICla
 
         var cancelResponse = await SendAuthorizedJsonAsync<object?>(
             HttpMethod.Put,
-            $"/Bookings/CancelBooking/{createdBooking!.Booking.Id}",
+            $"/Bookings/CancelBooking/{createdBooking.Booking.Id}",
             null,
             token);
 
         cancelResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var canceledBooking = await cancelResponse.Content.ReadFromJsonAsync<BookingActionResponse>();
         canceledBooking.Should().NotBeNull();
-        canceledBooking!.Booking.IsCanceled.Should().BeTrue();
+        canceledBooking.Booking.IsCanceled.Should().BeTrue();
         canceledBooking.SeatsRemaining.Should().Be(2);
 
         var historyResponse = await SendAuthorizedJsonAsync<object?>(
@@ -120,7 +120,42 @@ public class BookingsControllerTests(CustomWebApplicationFactory factory) : ICla
 
         var history = await historyResponse.Content.ReadFromJsonAsync<List<BookingDto>>();
         history.Should().NotBeNull();
-        history!.Should().ContainSingle(b => b.Id == createdBooking.Booking.Id && b.IsCanceled);
+        history.Should().ContainSingle(b => b.Id == createdBooking.Booking.Id && b.IsCanceled);
+    }
+
+    [Fact]
+    public async Task BookingResponses_ReturnShuttleMeetingTime_AndHistoryPreservesIt()
+    {
+        var userEmail = $"utente.meeting.{Guid.NewGuid():N}@test.it";
+        var token = await AuthenticateAsync(userEmail);
+        var meetingAtUtc = DateTime.UtcNow.Date.AddDays(9).AddHours(8).AddMinutes(30);
+        var shuttle = await CreateShuttleAsync("Shuttle Orario", 3, meetingAtUtc);
+
+        var createResponse = await SendAuthorizedJsonAsync(
+            HttpMethod.Post,
+            "/Bookings/CreateBooking",
+            new CreateBookingRequest
+            {
+                ShuttleId = shuttle.Id,
+                Date = meetingAtUtc
+            },
+            token);
+
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await createResponse.Content.ReadFromJsonAsync<BookingActionResponse>();
+        created.Should().NotBeNull();
+        created.Booking.MeetingAtUtc.Should().Be(meetingAtUtc);
+
+        var historyResponse = await SendAuthorizedJsonAsync<object?>(
+            HttpMethod.Get,
+            "/Bookings/GetUserHistory",
+            null,
+            token);
+        historyResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var history = await historyResponse.Content.ReadFromJsonAsync<List<BookingDto>>();
+        history.Should().NotBeNull();
+        history.Single(item => item.Id == created.Booking.Id).MeetingAtUtc.Should().Be(meetingAtUtc);
     }
 
     [Fact]
@@ -161,8 +196,8 @@ public class BookingsControllerTests(CustomWebApplicationFactory factory) : ICla
         var secondPayload = await second.Content.ReadFromJsonAsync<BookingActionResponse>();
         firstPayload.Should().NotBeNull();
         secondPayload.Should().NotBeNull();
-        secondPayload!.IsIdempotentReplay.Should().BeTrue();
-        secondPayload.Booking.Id.Should().Be(firstPayload!.Booking.Id);
+        secondPayload.IsIdempotentReplay.Should().BeTrue();
+        secondPayload.Booking.Id.Should().Be(firstPayload.Booking.Id);
     }
 
     [Fact]
@@ -198,11 +233,11 @@ public class BookingsControllerTests(CustomWebApplicationFactory factory) : ICla
             HttpMethod.Get, $"/Shuttles/GetShuttles?date={bookingDate:O}", null, tokens[0]);
         var availability = await availabilityHttpResponse.Content.ReadFromJsonAsync<List<ShuttleDto>>();
         availability.Should().NotBeNull();
-        availability!.Single(item => item.Id == shuttle.Id).AvailableSeats.Should().Be(0);
+        availability.Single(item => item.Id == shuttle.Id).AvailableSeats.Should().Be(0);
     }
 
     [Fact]
-    public async Task CreateBooking_SendsConfirmationPush_WhenPreferenceEnabled()
+    public async Task CreateBooking_SendsConfirmationNotifications_WhenPreferenceEnabled()
     {
         var userEmail = $"utente.pushconfirm.{Guid.NewGuid():N}@test.it";
         var token = await AuthenticateAsync(userEmail);
@@ -224,7 +259,9 @@ public class BookingsControllerTests(CustomWebApplicationFactory factory) : ICla
         booking.Should().NotBeNull();
 
         factory.PushNotificationService.Calls.Should().ContainSingle(call =>
-            call.UserId == booking!.Booking.UserId && call.Title == "Prenotazione confermata");
+            call.UserId == booking.Booking.UserId && call.Title == "Prenotazione confermata");
+        factory.EmailSender.Calls.Should().ContainSingle(call =>
+            call.ToEmail == userEmail && call.Subject == "Prenotazione shuttle confermata");
     }
 
     [Fact]
@@ -251,13 +288,13 @@ public class BookingsControllerTests(CustomWebApplicationFactory factory) : ICla
 
         // Senza questo campo il tap sulla notifica non saprebbe dove portare l'utente.
         var confirmationCall = factory.PushNotificationService.Calls
-            .Single(call => call.UserId == created!.Booking.UserId && call.Title == "Prenotazione confermata");
+            .Single(call => call.UserId == created.Booking.UserId && call.Title == "Prenotazione confermata");
         confirmationCall.Data.Should().NotBeNull();
         confirmationCall.Data!["type"].Should().Be(PushNotificationTypes.BookingConfirmed);
 
         var cancelResponse = await SendAuthorizedJsonAsync<object?>(
             HttpMethod.Put,
-            $"/Bookings/CancelBooking/{created!.Booking.Id}",
+            $"/Bookings/CancelBooking/{created.Booking.Id}",
             null,
             token);
         cancelResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -266,6 +303,8 @@ public class BookingsControllerTests(CustomWebApplicationFactory factory) : ICla
             .Single(call => call.UserId == created.Booking.UserId && call.Title == "Prenotazione annullata");
         cancellationCall.Data.Should().NotBeNull();
         cancellationCall.Data!["type"].Should().Be(PushNotificationTypes.BookingCanceled);
+        factory.EmailSender.Calls.Should().ContainSingle(call =>
+            call.ToEmail == userEmail && call.Subject == "Prenotazione shuttle annullata");
     }
 
     [Fact]
@@ -298,12 +337,13 @@ public class BookingsControllerTests(CustomWebApplicationFactory factory) : ICla
 
         var cancelResponse = await SendAuthorizedJsonAsync<object?>(
             HttpMethod.Put,
-            $"/Bookings/CancelBooking/{created!.Booking.Id}",
+            $"/Bookings/CancelBooking/{created.Booking.Id}",
             null,
             token);
         cancelResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         factory.PushNotificationService.Calls.Should().NotContain(call => call.UserId == created.Booking.UserId);
+        factory.EmailSender.Calls.Should().NotContain(call => call.ToEmail == userEmail);
     }
 
     private async Task<string> AuthenticateAsync(string email)
@@ -312,14 +352,13 @@ public class BookingsControllerTests(CustomWebApplicationFactory factory) : ICla
 
         var loginResponse = await _client.PostAsJsonAsync("/User/LoginWithGoogle", new GoogleLoginRequest
         {
-            Email = email,
-            GoogleToken = "valid-token"
+            IdToken = TestGoogleAuthService.CreateIdToken(email)
         });
 
         loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var payload = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
         payload.Should().NotBeNull();
-        return payload!.Token;
+        return payload.Token;
     }
 
     private async Task<HttpResponseMessage> SendAuthorizedJsonAsync<TBody>(
@@ -353,18 +392,23 @@ public class BookingsControllerTests(CustomWebApplicationFactory factory) : ICla
         response.StatusCode.Should().BeOneOf(HttpStatusCode.Created, HttpStatusCode.Conflict);
     }
 
-    private async Task<ShuttleDto> CreateShuttleAsync(string name, int capacity)
+    private async Task<ShuttleDto> CreateShuttleAsync(string name, int capacity, DateTime? meetingAtUtc = null)
     {
         var managerToken = await AuthenticateAsync("manager@test.it");
         var response = await SendAuthorizedJsonAsync(
             HttpMethod.Post,
             "/Shuttles/CreateShuttle",
-            new CreateShuttleDto { Name = name, Capacity = capacity },
+            new CreateShuttleDto
+            {
+                Name = name,
+                Capacity = capacity,
+                MeetingAtUtc = meetingAtUtc ?? DateTime.UtcNow
+            },
             managerToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var shuttle = await response.Content.ReadFromJsonAsync<ShuttleDto>();
         shuttle.Should().NotBeNull();
-        return shuttle!;
+        return shuttle;
     }
 }

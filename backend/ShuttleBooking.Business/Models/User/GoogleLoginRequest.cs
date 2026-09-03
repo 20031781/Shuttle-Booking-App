@@ -4,7 +4,12 @@ namespace ShuttleBooking.Business.Models.User;
 
 public class GoogleLoginRequest
 {
-    [Required] [EmailAddress] public required string Email { get; set; }
-
-    [Required] public required string GoogleToken { get; set; }
+    /// <summary>
+    ///     ID token emesso da Google. L'API ricava email, subject e profilo dal
+    ///     token validato: il client non invia un'email separata che potrebbe
+    ///     non corrispondere all'identita' Google.
+    /// </summary>
+    [Required]
+    [StringLength(20_000, MinimumLength = 1)]
+    public required string IdToken { get; init; }
 }

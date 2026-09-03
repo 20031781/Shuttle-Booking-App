@@ -16,17 +16,16 @@ public class AdminOpsControllerTests(CustomWebApplicationFactory factory) : ICla
     {
         var response = await _client.PostAsJsonAsync("/User/LoginWithGoogle", new GoogleLoginRequest
         {
-            Email = email,
-            GoogleToken = "valid-token"
+            IdToken = TestGoogleAuthService.CreateIdToken(email)
         });
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var payload = await response.Content.ReadFromJsonAsync<LoginResponse>();
         payload.Should().NotBeNull();
-        return payload!.Token;
+        return payload.Token;
     }
 
-    private HttpRequestMessage AuthenticatedRequest(HttpMethod method, string url, string token)
+    private static HttpRequestMessage AuthenticatedRequest(HttpMethod method, string url, string token)
     {
         var request = new HttpRequestMessage(method, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -46,8 +45,7 @@ public class AdminOpsControllerTests(CustomWebApplicationFactory factory) : ICla
         const string email = "admin@test.it";
         var loginResponse = await _client.PostAsJsonAsync("/User/LoginWithGoogle", new GoogleLoginRequest
         {
-            Email = email,
-            GoogleToken = "valid-token"
+            IdToken = TestGoogleAuthService.CreateIdToken(email)
         });
         loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -55,13 +53,13 @@ public class AdminOpsControllerTests(CustomWebApplicationFactory factory) : ICla
         loginPayload.Should().NotBeNull();
 
         using var overviewRequest = new HttpRequestMessage(HttpMethod.Get, "/AdminOps/Overview");
-        overviewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginPayload!.Token);
+        overviewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginPayload.Token);
         var overviewResponse = await _client.SendAsync(overviewRequest);
         overviewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var overviewPayload = await overviewResponse.Content.ReadFromJsonAsync<AdminOverviewDto>();
         overviewPayload.Should().NotBeNull();
-        overviewPayload!.GeneratedAtUtc.Should().NotBe(default);
+        overviewPayload.GeneratedAtUtc.Should().NotBe(default);
 
         using var healthRequest = new HttpRequestMessage(HttpMethod.Get, "/AdminOps/Health");
         healthRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginPayload.Token);
@@ -70,7 +68,7 @@ public class AdminOpsControllerTests(CustomWebApplicationFactory factory) : ICla
 
         var healthPayload = await healthResponse.Content.ReadFromJsonAsync<AdminHealthDto>();
         healthPayload.Should().NotBeNull();
-        healthPayload!.Components.Should().NotBeEmpty();
+        healthPayload.Components.Should().NotBeEmpty();
     }
 
     [Fact]
@@ -79,8 +77,7 @@ public class AdminOpsControllerTests(CustomWebApplicationFactory factory) : ICla
         var email = $"ops.user.{Guid.NewGuid():N}@test.it";
         var loginResponse = await _client.PostAsJsonAsync("/User/LoginWithGoogle", new GoogleLoginRequest
         {
-            Email = email,
-            GoogleToken = "valid-token"
+            IdToken = TestGoogleAuthService.CreateIdToken(email)
         });
         loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -88,7 +85,7 @@ public class AdminOpsControllerTests(CustomWebApplicationFactory factory) : ICla
         loginPayload.Should().NotBeNull();
 
         using var overviewRequest = new HttpRequestMessage(HttpMethod.Get, "/AdminOps/Overview");
-        overviewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginPayload!.Token);
+        overviewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginPayload.Token);
         var overviewResponse = await _client.SendAsync(overviewRequest);
         overviewResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -107,11 +104,12 @@ public class AdminOpsControllerTests(CustomWebApplicationFactory factory) : ICla
 
         var assignPayload = await assignResponse.Content.ReadFromJsonAsync<UserRolesDto>();
         assignPayload.Should().NotBeNull();
-        assignPayload!.Roles.Should().Contain(Roles.Manager);
+        assignPayload.Roles.Should().Contain(Roles.Manager);
 
         // Un nuovo login deve emettere un JWT che riflette il ruolo appena assegnato.
         var refreshedToken = await LoginAsync(targetEmail);
-        using var createShuttleRequest = AuthenticatedRequest(HttpMethod.Post, "/Shuttles/CreateShuttle", refreshedToken);
+        using var createShuttleRequest =
+            AuthenticatedRequest(HttpMethod.Post, "/Shuttles/CreateShuttle", refreshedToken);
         createShuttleRequest.Content = JsonContent.Create(new
         {
             Name = "Ruolo assegnato via test",
@@ -140,7 +138,7 @@ public class AdminOpsControllerTests(CustomWebApplicationFactory factory) : ICla
 
         var revokePayload = await revokeResponse.Content.ReadFromJsonAsync<UserRolesDto>();
         revokePayload.Should().NotBeNull();
-        revokePayload!.Roles.Should().NotContain(Roles.Manager);
+        revokePayload.Roles.Should().NotContain(Roles.Manager);
     }
 
     [Fact]
@@ -149,7 +147,8 @@ public class AdminOpsControllerTests(CustomWebApplicationFactory factory) : ICla
         var adminToken = await LoginAsync("admin@test.it");
 
         using var assignRequest = AuthenticatedRequest(HttpMethod.Post, "/AdminOps/Roles/Assign", adminToken);
-        assignRequest.Content = JsonContent.Create(new AssignRoleRequest { Email = "admin@test.it", Role = "SuperAdmin" });
+        assignRequest.Content = JsonContent.Create(new AssignRoleRequest
+            { Email = "admin@test.it", Role = "SuperAdmin" });
         var assignResponse = await _client.SendAsync(assignRequest);
 
         assignResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -177,7 +176,8 @@ public class AdminOpsControllerTests(CustomWebApplicationFactory factory) : ICla
         var managerToken = await LoginAsync("manager@test.it");
 
         using var assignRequest = AuthenticatedRequest(HttpMethod.Post, "/AdminOps/Roles/Assign", managerToken);
-        assignRequest.Content = JsonContent.Create(new AssignRoleRequest { Email = "manager@test.it", Role = Roles.Admin });
+        assignRequest.Content = JsonContent.Create(new AssignRoleRequest
+            { Email = "manager@test.it", Role = Roles.Admin });
         var assignResponse = await _client.SendAsync(assignRequest);
 
         assignResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);

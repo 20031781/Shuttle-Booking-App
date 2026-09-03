@@ -1,8 +1,10 @@
 import type {z} from 'zod';
 
 import {t} from '@/i18n';
+import googleSignInService from '@/services/google-signin.service';
 import type {UserProfile} from '@/types/domain';
 import {apiConfig} from './config';
+import {setApiReachable} from './apiStatus';
 import {loginApiSchema} from './schemas';
 import {isNetworkOnline} from './networkStatus';
 import {
@@ -325,6 +327,9 @@ async function submitLoginRequest(path: string, body: object): Promise<AuthSessi
             body: JSON.stringify(body),
             signal: controller.signal
         });
+        // Anche un 4xx/5xx dimostra che il backend è raggiungibile; solo gli
+        // errori di trasporto devono attivare il banner API non disponibile.
+        setApiReachable(true, 'response');
 
         if (!response.ok) {
             throw new Error(await parseErrorMessage(response));
@@ -335,6 +340,9 @@ async function submitLoginRequest(path: string, body: object): Promise<AuthSessi
         await saveAndApplyRemoteSession(normalized.session, normalized.user);
         return normalized.session;
     } catch (error) {
+        if (isNetworkRequestError(error)) {
+            setApiReachable(false, 'error');
+        }
         throw mapRequestError(error, t.auth.loginFailed);
     } finally {
         clearTimeout(timeout);
@@ -441,6 +449,7 @@ async function refreshSession(): Promise<AuthSession> {
             }),
             signal: controller.signal
         });
+        setApiReachable(true, 'response');
 
         if (!response.ok) {
             if (isAuthTerminalStatus(response.status)) {
@@ -462,6 +471,7 @@ async function refreshSession(): Promise<AuthSession> {
         const mappedError = mapRequestError(error, t.api.authRequired);
         if (isNetworkRequestError(error) && currentUser) {
             setAuthenticatedOffline(currentUser, currentTokens);
+            setApiReachable(false, 'error');
         }
 
         throw mappedError;
@@ -568,10 +578,9 @@ export async function loginWithPassword(credentials: PasswordCredentials): Promi
     });
 }
 
-export async function loginWithGoogle(email: string, googleToken: string): Promise<void> {
+export async function loginWithGoogle(idToken: string): Promise<void> {
     await submitLoginRequest('/User/LoginWithGoogle', {
-        email: normalizeEmail(email),
-        googleToken
+        idToken
     });
 }
 
@@ -657,6 +666,9 @@ export async function logoutCurrentSession(): Promise<void> {
     } finally {
         await clearPersistedSession();
         setSignedOut(false);
+        // Mantiene l'uscita coerente anche con Google: il picker esplicito
+        // resta disponibile per scegliere subito un altro account al login.
+        void googleSignInService.signOut();
     }
 }
 

@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using ShuttleBooking.Business.DTOs;
 using ShuttleBooking.Business.Interfaces;
 using ShuttleBooking.Business.Models;
-using ShuttleBooking.Business.Models.Admin;
 using ShuttleBooking.Business.Models.Auth;
 
 namespace ShuttleBooking.Presentation.Controller;
@@ -15,7 +14,6 @@ namespace ShuttleBooking.Presentation.Controller;
 [Route("[controller]")]
 public class ShuttlesController(IShuttleService shuttleService) : ControllerBase
 {
-
     /// <summary>
     ///     Ottiene tutti gli shuttle.
     /// </summary>

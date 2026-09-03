@@ -199,7 +199,7 @@ export function BookingHistoryScreen() {
                             color={isActive ? colors.subtleText : colors.mutedText}
                         />
                         <Text style={[styles.meetingLine, !isActive && styles.meetingLineInactive]}>
-                            {formatMeeting(item.date)}
+                            {formatMeeting(item.meetingAtUtc ?? item.date)}
                         </Text>
                     </View>
                     {isActive ? <Pressable

@@ -6,6 +6,7 @@ public static class EmailAllowlist
     {
         if (string.IsNullOrWhiteSpace(email)) return false;
 
-        return allowedEmails.Any(allowedEmail => string.Equals(allowedEmail, email, StringComparison.OrdinalIgnoreCase));
+        return allowedEmails.Any(allowedEmail =>
+            string.Equals(allowedEmail, email, StringComparison.OrdinalIgnoreCase));
     }
 }

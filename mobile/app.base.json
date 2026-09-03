@@ -2,29 +2,32 @@
   "expo": {
     "name": "Shuttle Booking",
     "slug": "shuttle-booking-mobile",
-    "version": "1.0.0",
+    "version": "5",
+    "newArchEnabled": true,
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "notification": {
       "color": "#3c43ff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "updates": {
+      "enabled": false
+    },
+    "assetBundlePatterns": ["**/*"],
     "android": {
       "package": "com.shuttlebooking.com",
-      "googleServicesFile": "./google-services.json",
-      "versionCode": 1,
-      "permissions": [
-        "android.permission.NOTIFICATIONS"
-      ]
+      "versionCode": 5,
+      "permissions": ["android.permission.NOTIFICATIONS"]
     },
     "plugins": [
       "expo-notifications",
-      "expo-web-browser",
       "expo-secure-store",
       "@react-native-community/datetimepicker"
     ],
-    "scheme": "shuttlebooking"
+    "scheme": "shuttlebooking",
+    "extra": {
+      "eas": {
+        "projectId": "92c02385-2b1b-477c-8744-f6becd0a7944"
+      }
+    }
   }
 }

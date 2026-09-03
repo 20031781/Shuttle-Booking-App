@@ -17,14 +17,13 @@ public class UserAuthControllerTests(CustomWebApplicationFactory factory) : ICla
 
         var loginResponse = await _client.PostAsJsonAsync("/User/LoginWithGoogle", new GoogleLoginRequest
         {
-            Email = email,
-            GoogleToken = "valid-token"
+            IdToken = TestGoogleAuthService.CreateIdToken(email)
         });
 
         loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var loginPayload = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
         loginPayload.Should().NotBeNull();
-        loginPayload!.User.IsProfileCompleted.Should().BeFalse();
+        loginPayload.User.IsProfileCompleted.Should().BeFalse();
 
         using var profileRequest = new HttpRequestMessage(HttpMethod.Get, "/User/Me");
         profileRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginPayload.Token);
@@ -38,7 +37,7 @@ public class UserAuthControllerTests(CustomWebApplicationFactory factory) : ICla
 
         var accessPayload = await accessResponse.Content.ReadFromJsonAsync<UserAccessDto>();
         accessPayload.Should().NotBeNull();
-        accessPayload!.IsAdmin.Should().BeFalse();
+        accessPayload.IsAdmin.Should().BeFalse();
         accessPayload.IsManager.Should().BeFalse();
 
         using var deviceTokenRequest = new HttpRequestMessage(HttpMethod.Post, "/User/DeviceToken");
@@ -69,7 +68,7 @@ public class UserAuthControllerTests(CustomWebApplicationFactory factory) : ICla
         refreshResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var refreshPayload = await refreshResponse.Content.ReadFromJsonAsync<LoginResponse>();
         refreshPayload.Should().NotBeNull();
-        refreshPayload!.Token.Should().NotBeNullOrWhiteSpace();
+        refreshPayload.Token.Should().NotBeNullOrWhiteSpace();
         refreshPayload.RefreshToken.Should().NotBeNullOrWhiteSpace();
         refreshPayload.RefreshToken.Should().NotBe(loginPayload.RefreshToken);
 
@@ -107,7 +106,7 @@ public class UserAuthControllerTests(CustomWebApplicationFactory factory) : ICla
 
         var loginPayload = await registerResponse.Content.ReadFromJsonAsync<LoginResponse>();
         loginPayload.Should().NotBeNull();
-        loginPayload!.Token.Should().NotBeNullOrWhiteSpace();
+        loginPayload.Token.Should().NotBeNullOrWhiteSpace();
         loginPayload.RefreshToken.Should().NotBeNullOrWhiteSpace();
         loginPayload.User.Email.Should().Be(email);
         loginPayload.User.AuthProvider.Should().Be("App");
@@ -128,7 +127,7 @@ public class UserAuthControllerTests(CustomWebApplicationFactory factory) : ICla
 
         var completedProfile = await completeProfileResponse.Content.ReadFromJsonAsync<UserDto>();
         completedProfile.Should().NotBeNull();
-        completedProfile!.FirstName.Should().Be("Lorenzo");
+        completedProfile.FirstName.Should().Be("Lorenzo");
         completedProfile.LastName.Should().Be("Appetito");
         completedProfile.Club.Should().Be("Shuttle Club");
         completedProfile.City.Should().Be("Roma");
@@ -140,8 +139,7 @@ public class UserAuthControllerTests(CustomWebApplicationFactory factory) : ICla
     {
         var adminLogin = await _client.PostAsJsonAsync("/User/LoginWithGoogle", new GoogleLoginRequest
         {
-            Email = "admin@test.it",
-            GoogleToken = "valid-token"
+            IdToken = TestGoogleAuthService.CreateIdToken("admin@test.it")
         });
         adminLogin.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -149,19 +147,18 @@ public class UserAuthControllerTests(CustomWebApplicationFactory factory) : ICla
         adminPayload.Should().NotBeNull();
 
         using var adminAccessRequest = new HttpRequestMessage(HttpMethod.Get, "/User/Access");
-        adminAccessRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", adminPayload!.Token);
+        adminAccessRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", adminPayload.Token);
         var adminAccessResponse = await _client.SendAsync(adminAccessRequest);
         adminAccessResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var adminAccess = await adminAccessResponse.Content.ReadFromJsonAsync<UserAccessDto>();
         adminAccess.Should().NotBeNull();
-        adminAccess!.IsAdmin.Should().BeTrue();
+        adminAccess.IsAdmin.Should().BeTrue();
         adminAccess.IsManager.Should().BeFalse();
 
         var managerLogin = await _client.PostAsJsonAsync("/User/LoginWithGoogle", new GoogleLoginRequest
         {
-            Email = "manager@test.it",
-            GoogleToken = "valid-token"
+            IdToken = TestGoogleAuthService.CreateIdToken("manager@test.it")
         });
         managerLogin.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -169,13 +166,13 @@ public class UserAuthControllerTests(CustomWebApplicationFactory factory) : ICla
         managerPayload.Should().NotBeNull();
 
         using var managerAccessRequest = new HttpRequestMessage(HttpMethod.Get, "/User/Access");
-        managerAccessRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", managerPayload!.Token);
+        managerAccessRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", managerPayload.Token);
         var managerAccessResponse = await _client.SendAsync(managerAccessRequest);
         managerAccessResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var managerAccess = await managerAccessResponse.Content.ReadFromJsonAsync<UserAccessDto>();
         managerAccess.Should().NotBeNull();
-        managerAccess!.IsAdmin.Should().BeFalse();
+        managerAccess.IsAdmin.Should().BeFalse();
         managerAccess.IsManager.Should().BeTrue();
     }
 }

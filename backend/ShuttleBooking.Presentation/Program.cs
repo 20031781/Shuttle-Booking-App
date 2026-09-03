@@ -5,9 +5,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Serilog;
@@ -35,22 +33,22 @@ try
     var builder = WebApplication.CreateBuilder(args);
 
     builder.Host.UseSerilog((context, services, loggerConfiguration) => loggerConfiguration
-        .ReadFrom.Configuration(context.Configuration)
-        .ReadFrom.Services(services)
-        .Enrich.FromLogContext()
-        .Enrich.WithMachineName()
-        .WriteTo.Console(
-            outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {TraceId} {Message:lj}{NewLine}{Exception}")
-        .WriteTo.File(
-            Path.Combine(AppContext.BaseDirectory, "logs", "shuttlebooking-.log"),
-            rollingInterval: RollingInterval.Day,
-            retainedFileCountLimit: 14,
-            outputTemplate:
-            "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {TraceId} {Message:lj}{NewLine}{Exception}"),
+            .ReadFrom.Configuration(context.Configuration)
+            .ReadFrom.Services(services)
+            .Enrich.FromLogContext()
+            .Enrich.WithMachineName()
+            .WriteTo.Console(
+                outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {TraceId} {Message:lj}{NewLine}{Exception}")
+            .WriteTo.File(
+                Path.Combine(AppContext.BaseDirectory, "logs", "shuttlebooking-.log"),
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: 14,
+                outputTemplate:
+                "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {TraceId} {Message:lj}{NewLine}{Exception}"),
         // Non tocca Log.Logger (resta il bootstrap logger console-only): necessario perché
         // i test creano più WebApplicationFactory nello stesso processo e il logger statico
         // può essere "congelato" una sola volta.
-        preserveStaticLogger: true);
+        true);
 
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(options =>
@@ -212,10 +210,28 @@ try
     builder.Services.AddScoped<IUserService, UserService>();
     builder.Services.AddScoped<IAdminOpsService, AdminOpsService>();
     builder.Services.AddScoped<IJwtService, JwtService>();
-    builder.Services.AddHttpClient<IGoogleAuthService, GoogleAuthService>();
+    builder.Services.AddSingleton<IGoogleAuthService, GoogleAuthService>();
+    builder.Services.AddHttpClient<IEmailSender, ResendEmailSender>();
     builder.Services.AddHttpClient<IPushNotificationService, FirebasePushNotificationService>();
 
     var app = builder.Build();
+
+    // I valori di esempio sono volutamente innocui e finiscono nel repository:
+    // in produzione sarebbe pericoloso avviarsi e scoprire solo al primo login o
+    // alla prima prenotazione che Google/Resend non sono realmente configurati.
+    // La configurazione risolta dal container include anche gli override finali
+    // (per esempio quelli applicati dall'host di deploy o dai test di integrazione).
+    if (app.Environment.IsProduction())
+    {
+        var configuration = app.Services.GetRequiredService<IConfiguration>();
+        var googleAudiences = GoogleAudienceConfiguration.GetAudiences(configuration);
+        if (googleAudiences.Count == 0 || googleAudiences.Any(IsPlaceholderConfigurationValue))
+            throw new InvalidOperationException(
+                "GoogleAuth richiede almeno un OAuth client ID reale in Production.");
+
+        RequireProductionConfiguration(configuration, "Resend:ApiKey");
+        RequireProductionConfiguration(configuration, "Resend:FromAddress");
+    }
 
     // Deve avvolgere l'intera pipeline (incluso UseExceptionHandler): l'handler rientra
     // nella pipeline sullo stesso HttpContext, quindi il TraceId resta nel LogContext anche
@@ -270,6 +286,17 @@ static string GetClientIpAddress(HttpContext context)
 
     return string.IsNullOrWhiteSpace(ip) ? "unknown" : ip;
 }
+
+static void RequireProductionConfiguration(IConfiguration configuration, string key)
+{
+    var value = configuration[key]?.Trim();
+    if (string.IsNullOrWhiteSpace(value) || IsPlaceholderConfigurationValue(value))
+        throw new InvalidOperationException($"{key} deve essere configurato con un valore reale in Production.");
+}
+
+static bool IsPlaceholderConfigurationValue(string value) =>
+    value.Contains("CHANGE_ME", StringComparison.OrdinalIgnoreCase)
+    || value.Contains("YOUR_", StringComparison.OrdinalIgnoreCase);
 
 /// <summary>
 ///     Entry point dell'applicazione (utile per integrazione con WebApplicationFactory nei test).

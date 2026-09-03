@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Options;
 using ShuttleBooking.Business.Models.Admin;
 using ShuttleBooking.Business.Models.Auth;
@@ -18,6 +19,7 @@ public class UserService(
 {
     private readonly AdminDashboardOptions _adminOptions = adminOptionsAccessor.Value;
     private readonly ManagerDashboardOptions _managerOptions = managerOptionsAccessor.Value;
+
     public async Task<UserDto?> GetUserByEmailAsync(string email)
     {
         var normalizedEmail = NormalizeEmail(email);
@@ -103,32 +105,61 @@ public class UserService(
 
     public async Task<LoginResponse> LoginWithGoogleAsync(GoogleLoginRequest request)
     {
-        var normalizedEmail = NormalizeEmail(request.Email);
+        GoogleIdentity identity;
+        try
+        {
+            identity = await googleAuthService.ValidateIdTokenAsync(request.IdToken);
+        }
+        catch (Exception exception)
+        {
+            throw new UnauthorizedAccessException("ID token Google non valido.", exception);
+        }
 
-        var isValidToken = await googleAuthService.ValidateTokenAsync(request.GoogleToken, normalizedEmail);
-        if (!isValidToken)
-            throw new UnauthorizedAccessException("Token Google non valido o non corrispondente all'email fornita");
+        if (!identity.EmailVerified || string.IsNullOrWhiteSpace(identity.Subject) ||
+            !TryNormalizeGoogleEmail(identity.Email, out var normalizedEmail))
+            throw new UnauthorizedAccessException("ID token Google non valido.");
 
-        var user = await userRepository.GetByEmailAsync(normalizedEmail);
+        var googleId = identity.Subject.Trim();
+        var profilePicture = NormalizeGooglePictureUrl(identity.PictureUrl);
+        var user = await userRepository.GetByGoogleIdAsync(googleId);
+
         if (user == null)
         {
-            var username = await GenerateUniqueUsernameAsync(normalizedEmail);
-
-            user = new User
+            var existingByEmail = await userRepository.GetByEmailAsync(normalizedEmail);
+            if (existingByEmail != null)
             {
-                Email = normalizedEmail,
-                FirstName = string.Empty,
-                LastName = string.Empty,
-                Username = username,
-                AuthProvider = "Google",
-                PhoneCountryCode = "+39",
-                City = string.Empty,
-                Club = null,
-                IsProfileCompleted = false,
-                CreatedAt = DateTime.UtcNow
-            };
+                // L'email proviene dall'ID token firmato e risulta verificata da
+                // Google: e' sicuro collegarla a un account locale che non ha
+                // ancora un'identita' Google. Non sostituiamo mai un subject gia'
+                // associato: un cambio dell'email Google non deve consentire di
+                // prendere o ricollegare un account esistente.
+                if (!string.IsNullOrWhiteSpace(existingByEmail.GoogleId) &&
+                    !string.Equals(existingByEmail.GoogleId, googleId, StringComparison.Ordinal))
+                    throw new UnauthorizedAccessException("L'account Google non corrisponde all'account esistente.");
 
-            user = await userRepository.CreateAsync(user);
+                user = await userRepository.LinkGoogleAccountAsync(existingByEmail.Id, googleId, profilePicture);
+            }
+            else
+            {
+                var username = await GenerateUniqueUsernameAsync(normalizedEmail);
+                var (firstName, lastName) = SplitGoogleName(identity.FullName, normalizedEmail);
+
+                user = await userRepository.CreateAsync(new User
+                {
+                    Email = normalizedEmail,
+                    FirstName = firstName,
+                    LastName = lastName,
+                    Username = username,
+                    AuthProvider = "Google",
+                    GoogleId = googleId,
+                    ProfilePicture = profilePicture,
+                    PhoneCountryCode = "+39",
+                    City = string.Empty,
+                    Club = null,
+                    IsProfileCompleted = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
         }
 
         return await IssueTokensAsync(user);
@@ -230,6 +261,40 @@ public class UserService(
         await userRepository.UpdateAsync(user);
     }
 
+    public async Task<UserRolesDto> AssignRoleAsync(string email, string role)
+    {
+        var normalizedRole = ValidateRole(role);
+        var normalizedEmail = NormalizeEmail(email);
+        var user = await userRepository.GetByEmailAsync(normalizedEmail)
+                   ?? throw new KeyNotFoundException($"Utente con email {normalizedEmail} non trovato.");
+
+        await userRoleRepository.AddRoleAsync(user.Id, normalizedRole);
+        var roles = await userRoleRepository.GetRolesAsync(user.Id);
+        return new UserRolesDto { Email = user.Email, Roles = roles };
+    }
+
+    public async Task<UserRolesDto> RevokeRoleAsync(string email, string role)
+    {
+        var normalizedRole = ValidateRole(role);
+        var normalizedEmail = NormalizeEmail(email);
+        var user = await userRepository.GetByEmailAsync(normalizedEmail)
+                   ?? throw new KeyNotFoundException($"Utente con email {normalizedEmail} non trovato.");
+
+        await userRoleRepository.RemoveRoleAsync(user.Id, normalizedRole);
+        var roles = await userRoleRepository.GetRolesAsync(user.Id);
+        return new UserRolesDto { Email = user.Email, Roles = roles };
+    }
+
+    public async Task<UserRolesDto> GetRolesAsync(string email)
+    {
+        var normalizedEmail = NormalizeEmail(email);
+        var user = await userRepository.GetByEmailAsync(normalizedEmail)
+                   ?? throw new KeyNotFoundException($"Utente con email {normalizedEmail} non trovato.");
+
+        var roles = await userRoleRepository.GetRolesAsync(user.Id);
+        return new UserRolesDto { Email = user.Email, Roles = roles };
+    }
+
     private async Task<LoginResponse> IssueTokensAsync(User user)
     {
         var roles = await ReconcileBootstrapRolesAsync(user);
@@ -271,40 +336,6 @@ public class UserService(
         return roles;
     }
 
-    public async Task<UserRolesDto> AssignRoleAsync(string email, string role)
-    {
-        var normalizedRole = ValidateRole(role);
-        var normalizedEmail = NormalizeEmail(email);
-        var user = await userRepository.GetByEmailAsync(normalizedEmail)
-                   ?? throw new KeyNotFoundException($"Utente con email {normalizedEmail} non trovato.");
-
-        await userRoleRepository.AddRoleAsync(user.Id, normalizedRole);
-        var roles = await userRoleRepository.GetRolesAsync(user.Id);
-        return new UserRolesDto { Email = user.Email, Roles = roles };
-    }
-
-    public async Task<UserRolesDto> RevokeRoleAsync(string email, string role)
-    {
-        var normalizedRole = ValidateRole(role);
-        var normalizedEmail = NormalizeEmail(email);
-        var user = await userRepository.GetByEmailAsync(normalizedEmail)
-                   ?? throw new KeyNotFoundException($"Utente con email {normalizedEmail} non trovato.");
-
-        await userRoleRepository.RemoveRoleAsync(user.Id, normalizedRole);
-        var roles = await userRoleRepository.GetRolesAsync(user.Id);
-        return new UserRolesDto { Email = user.Email, Roles = roles };
-    }
-
-    public async Task<UserRolesDto> GetRolesAsync(string email)
-    {
-        var normalizedEmail = NormalizeEmail(email);
-        var user = await userRepository.GetByEmailAsync(normalizedEmail)
-                   ?? throw new KeyNotFoundException($"Utente con email {normalizedEmail} non trovato.");
-
-        var roles = await userRoleRepository.GetRolesAsync(user.Id);
-        return new UserRolesDto { Email = user.Email, Roles = roles };
-    }
-
     private static string ValidateRole(string role)
     {
         var trimmedRole = role.Trim();
@@ -319,6 +350,42 @@ public class UserService(
     }
 
     private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
+
+    private static bool TryNormalizeGoogleEmail(string? email, out string normalizedEmail)
+    {
+        normalizedEmail = email?.Trim().ToLowerInvariant() ?? string.Empty;
+        return normalizedEmail.Length is > 0 and <= 100 &&
+               !normalizedEmail.Any(char.IsControl) &&
+               new EmailAddressAttribute().IsValid(normalizedEmail);
+    }
+
+    private static (string FirstName, string LastName) SplitGoogleName(string? fullName, string email)
+    {
+        var sanitized = new string((fullName ?? string.Empty)
+                .Where(character => !char.IsControl(character))
+                .ToArray())
+            .Trim();
+        var parts = sanitized.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length == 0)
+        {
+            var fallback = email.Split('@')[0];
+            return (Truncate(fallback, 50), string.Empty);
+        }
+
+        var firstName = Truncate(parts[0], 50);
+        var lastName = parts.Length == 1 ? string.Empty : Truncate(string.Join(' ', parts[1..]), 50);
+        return (firstName, lastName);
+    }
+
+    private static string? NormalizeGooglePictureUrl(string? pictureUrl)
+    {
+        var normalized = pictureUrl?.Trim();
+        return string.IsNullOrWhiteSpace(normalized) || normalized.Length > 255 ? null : normalized;
+    }
+
+    private static string Truncate(string value, int maximumLength) =>
+        value.Length <= maximumLength ? value : value[..maximumLength];
 
     private static UserDto MapToDto(User user) =>
         new()

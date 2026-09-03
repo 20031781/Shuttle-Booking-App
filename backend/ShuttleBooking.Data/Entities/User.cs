@@ -19,6 +19,13 @@ public class User
 
     [Required] [MaxLength(20)] public required string AuthProvider { get; set; }
 
+    /// <summary>
+    ///     Subject stabile (<c>sub</c>) dell'account Google. L'email puo'
+    ///     cambiare, percio' non viene usata come identita' primaria Google.
+    /// </summary>
+    [MaxLength(255)]
+    public string? GoogleId { get; set; }
+
     [MaxLength(256)] public string? PasswordHash { get; set; }
 
     [Required] public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

@@ -21,6 +21,7 @@ function bookingDto(overrides?: Partial<{
     shuttleId: number;
     shuttleName: string;
     date: string;
+    meetingAtUtc?: string;
     createdAt: string;
     isCanceled: boolean;
     canceledAt: string | null;
@@ -55,6 +56,15 @@ describe('ApiBookingRepository', () => {
         expect(bookings[0]).toMatchObject({id: '1', shuttleId: '3', status: 'active'});
         expect(bookings[0]!.seatsRemaining).toBeUndefined();
         expect(bookings[1]).toMatchObject({id: '2', status: 'canceled'});
+    });
+
+    it('propaga l orario effettivo dello shuttle nello storico', async () => {
+        getJsonAuthMock.mockResolvedValueOnce([bookingDto({meetingAtUtc: '2026-08-01T08:30:00Z'})]);
+
+        const {ApiBookingRepository} = await import('./bookingRepository');
+        const bookings = await new ApiBookingRepository().list();
+
+        expect(bookings[0]?.meetingAtUtc).toBe('2026-08-01T08:30:00Z');
     });
 
     it('create() converte shuttleId in numero, invia idempotency key e riporta seatsRemaining', async () => {

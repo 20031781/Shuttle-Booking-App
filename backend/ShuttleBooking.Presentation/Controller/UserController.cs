@@ -18,7 +18,6 @@ public class UserController(
     IUserService userService,
     IPushNotificationService pushNotificationService) : ControllerBase
 {
-
     /// <summary>
     ///     Registra un nuovo utente.
     /// </summary>
@@ -427,5 +426,4 @@ public class UserController(
         var rawUserId = User.FindFirstValue("userId") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
         return int.TryParse(rawUserId, out userId);
     }
-
 }

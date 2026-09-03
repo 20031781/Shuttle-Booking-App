@@ -119,7 +119,8 @@ public class UserServiceTests
             .Returns("refresh-token-register-hash");
 
         _jwtServiceMock
-            .Setup(service => service.GenerateToken(It.IsAny<User>(), It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>()))
+            .Setup(service =>
+                service.GenerateToken(It.IsAny<User>(), It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>()))
             .Returns("jwt-token-register");
 
         _userRepositoryMock
@@ -144,15 +145,14 @@ public class UserServiceTests
     public async Task LoginWithGoogleAsync_Throws_WhenTokenIsInvalid()
     {
         _googleAuthServiceMock
-            .Setup(service => service.ValidateTokenAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync(false);
+            .Setup(service => service.ValidateIdTokenAsync("invalid-token"))
+            .ThrowsAsync(new InvalidOperationException("Firma token non valida."));
 
         var userService = CreateService();
 
         var action = async () => await userService.LoginWithGoogleAsync(new GoogleLoginRequest
         {
-            Email = "utente@test.it",
-            GoogleToken = "invalid-token"
+            IdToken = "invalid-token"
         });
 
         await action.Should().ThrowAsync<UnauthorizedAccessException>();
@@ -164,8 +164,17 @@ public class UserServiceTests
         var now = DateTime.UtcNow;
 
         _googleAuthServiceMock
-            .Setup(service => service.ValidateTokenAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync(true);
+            .Setup(service => service.ValidateIdTokenAsync("valid-token"))
+            .ReturnsAsync(new GoogleIdentity(
+                "google-subject-42",
+                "Utente@Test.It",
+                "Mario Rossi",
+                "https://example.test/avatar.png",
+                true));
+
+        _userRepositoryMock
+            .Setup(repository => repository.GetByGoogleIdAsync("google-subject-42"))
+            .ReturnsAsync((User?)null);
 
         _userRepositoryMock
             .Setup(repository => repository.GetByEmailAsync("utente@test.it"))
@@ -196,14 +205,14 @@ public class UserServiceTests
             .Returns("refresh-token-hash");
 
         _jwtServiceMock
-            .Setup(service => service.GenerateToken(It.IsAny<User>(), It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>()))
+            .Setup(service =>
+                service.GenerateToken(It.IsAny<User>(), It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>()))
             .Returns("jwt-token");
 
         var userService = CreateService();
         var response = await userService.LoginWithGoogleAsync(new GoogleLoginRequest
         {
-            Email = "utente@test.it",
-            GoogleToken = "valid-token"
+            IdToken = "valid-token"
         });
 
         response.Token.Should().Be("jwt-token");
@@ -211,8 +220,104 @@ public class UserServiceTests
         response.User.Email.Should().Be("utente@test.it");
         response.User.AuthProvider.Should().Be("Google");
         response.User.Id.Should().Be(42);
+        response.User.FirstName.Should().Be("Mario");
+        response.User.LastName.Should().Be("Rossi");
 
         _userRepositoryMock.Verify(repository => repository.CreateAsync(It.IsAny<User>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task LoginWithGoogleAsync_LinksExistingUserByVerifiedGoogleEmail()
+    {
+        var existingUser = new User
+        {
+            Id = 73,
+            Email = "utente@test.it",
+            FirstName = "Utente",
+            LastName = "Esistente",
+            AuthProvider = "App",
+            PhoneCountryCode = "+39",
+            City = "Roma",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _googleAuthServiceMock
+            .Setup(service => service.ValidateIdTokenAsync("valid-token"))
+            .ReturnsAsync(new GoogleIdentity(
+                "google-subject-existing",
+                "utente@test.it",
+                "Utente Esistente",
+                "https://example.test/avatar.png",
+                true));
+        _userRepositoryMock
+            .Setup(repository => repository.GetByGoogleIdAsync("google-subject-existing"))
+            .ReturnsAsync((User?)null);
+        _userRepositoryMock
+            .Setup(repository => repository.GetByEmailAsync("utente@test.it"))
+            .ReturnsAsync(existingUser);
+        _userRepositoryMock
+            .Setup(repository => repository.LinkGoogleAccountAsync(
+                existingUser.Id,
+                "google-subject-existing",
+                "https://example.test/avatar.png"))
+            .ReturnsAsync(() =>
+            {
+                existingUser.GoogleId = "google-subject-existing";
+                existingUser.ProfilePicture = "https://example.test/avatar.png";
+                return existingUser;
+            });
+
+        var userService = CreateService();
+        var response = await userService.LoginWithGoogleAsync(new GoogleLoginRequest { IdToken = "valid-token" });
+
+        response.User.Id.Should().Be(existingUser.Id);
+        response.User.AuthProvider.Should().Be("App");
+        existingUser.GoogleId.Should().Be("google-subject-existing");
+        _userRepositoryMock.Verify(repository => repository.CreateAsync(It.IsAny<User>()), Times.Never);
+        _userRepositoryMock.Verify(repository => repository.LinkGoogleAccountAsync(
+            existingUser.Id,
+            "google-subject-existing",
+            "https://example.test/avatar.png"), Times.Once);
+    }
+
+    [Fact]
+    public async Task LoginWithGoogleAsync_DoesNotReplaceAnExistingGoogleIdentity()
+    {
+        var existingUser = new User
+        {
+            Id = 74,
+            Email = "utente@test.it",
+            FirstName = "Utente",
+            LastName = "Esistente",
+            AuthProvider = "Google",
+            GoogleId = "google-subject-original",
+            PhoneCountryCode = "+39",
+            City = "Roma",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _googleAuthServiceMock
+            .Setup(service => service.ValidateIdTokenAsync("different-google-token"))
+            .ReturnsAsync(new GoogleIdentity(
+                "google-subject-different",
+                "utente@test.it",
+                "Utente Esistente",
+                "https://example.test/avatar.png",
+                true));
+        _userRepositoryMock
+            .Setup(repository => repository.GetByGoogleIdAsync("google-subject-different"))
+            .ReturnsAsync((User?)null);
+        _userRepositoryMock
+            .Setup(repository => repository.GetByEmailAsync("utente@test.it"))
+            .ReturnsAsync(existingUser);
+
+        var userService = CreateService();
+        var action = () => userService.LoginWithGoogleAsync(
+            new GoogleLoginRequest { IdToken = "different-google-token" });
+
+        await action.Should().ThrowAsync<UnauthorizedAccessException>();
+        _userRepositoryMock.Verify(repository => repository.LinkGoogleAccountAsync(
+            It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
     }
 
     [Fact]
@@ -282,7 +387,8 @@ public class UserServiceTests
             .Returns("refresh-token-login-hash");
 
         _jwtServiceMock
-            .Setup(service => service.GenerateToken(It.IsAny<User>(), It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>()))
+            .Setup(service =>
+                service.GenerateToken(It.IsAny<User>(), It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>()))
             .Returns("jwt-token-login");
 
         var userService = CreateService();

@@ -151,10 +151,12 @@ public class FirebasePushNotificationService(
 
             GoogleCredential? credential = null;
             if (!string.IsNullOrWhiteSpace(_options.ServiceAccountJson))
-                credential = GoogleCredential.FromJson(_options.ServiceAccountJson);
+                credential = CredentialFactory.FromJson<ServiceAccountCredential>(_options.ServiceAccountJson)
+                    .ToGoogleCredential();
             else if (!string.IsNullOrWhiteSpace(_options.ServiceAccountPath) &&
                      File.Exists(_options.ServiceAccountPath))
-                credential = GoogleCredential.FromFile(_options.ServiceAccountPath);
+                credential = CredentialFactory.FromFile<ServiceAccountCredential>(_options.ServiceAccountPath)
+                    .ToGoogleCredential();
 
             _credential = credential?.CreateScoped(FirebaseScope);
             return _credential;

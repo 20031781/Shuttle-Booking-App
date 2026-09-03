@@ -1,0 +1,18 @@
+# EAS only needs the Expo source/configuration and package manifests.
+# Native and dependency artifacts are regenerated on the EAS worker.
+node_modules/
+android/
+ios/
+.expo/
+.expo-shared/
+dist/
+web-build/
+*.apk
+*.aab
+*.log
+coverage/
+
+# Firebase file is supplied to production builds through the EAS secret file
+# variable GOOGLE_SERVICES_JSON.
+google-services.json
+GoogleService-Info.plist
